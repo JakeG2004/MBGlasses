@@ -1,8 +1,10 @@
 CXX = gcc
 CXXFLAGS = -O2 -lftdi1 -lncurses -I/usr/include/libftdi1
 
-broadcast: broadcast.c
+all: console
+
+console: console.c
 	$(CXX) $^ $(CXXFLAGS) -o $@
 
 clean:
-	rm -f broadcast AT_Console
+	rm -f console
