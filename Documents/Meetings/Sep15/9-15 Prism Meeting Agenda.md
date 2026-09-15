@@ -2,7 +2,7 @@
 
 ---
 
-## **Date:** September 15th, 2026   **Time:** 2:30 PM   **Location: ** JEB
+## **Date:** September 15th, 2026   **Time:** 2:30 PM   **Location:** JEB
 
 ---
 
