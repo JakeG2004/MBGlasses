@@ -16,6 +16,52 @@ pub struct Xbee {
     dev: FtdiDevice,
 }
 
+pub enum XbeeHandle {
+    Real(Xbee),
+    Simulated(SimXbee),
+}
+
+impl XbeeHandle {
+    pub async fn send(&mut self, packet: &Packet) -> anyhow::Result<()> {
+        match self {
+            XbeeHandle::Real(x) => x.send(packet).await.map_err(Into::into),
+            XbeeHandle::Simulated(s) => s.send(packet).await,
+        }
+    }
+
+    pub async fn close(self) {
+        if let XbeeHandle::Real(x) = self {
+            x.close().await;
+        }
+    }
+
+    pub fn is_simulated(&self) -> bool {
+        matches!(self, XbeeHandle::Simulated(_))
+    }
+}
+
+pub struct SimXbee {
+    pub packet_count: u64,
+    log: Option<std::fs::File>,
+}
+
+impl SimXbee {
+    pub fn new(log_path: Option<&std::path::Path>) -> anyhow::Result<Self> {
+        let log = log_path.map(std::fs::File::create).transpose()?;
+        Ok(Self { packet_count: 0, log })
+    }
+
+    pub async fn send(&mut self, packet: &Packet) -> anyhow::Result<()> {
+        self.packet_count += 1;
+        if let Some(f) = &mut self.log {
+            use std::io::Write;
+            let hex_str: String = packet.iter().map(|b| format!("{:02x}", b)).collect();
+            writeln!(f, "{}", hex_str)?;
+        }
+        Ok(())
+    }
+}
+
 impl Xbee {
     /// Discovers and lists all FTDI devices matching VID/PID.
     /// Replicates the device enumeration and prints from `glasses.c`.

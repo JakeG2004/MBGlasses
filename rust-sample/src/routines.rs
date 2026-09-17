@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::patterns::*;
 use crate::term::{LoopStatus, Terminal, UiState};
 use crate::timing::*;
-use crate::xbee::Xbee;
+use crate::xbee::XbeeHandle;
 
 pub enum Action {
     Continue,
@@ -11,7 +11,7 @@ pub enum Action {
 }
 
 pub struct App {
-    pub xbee: Xbee,
+    pub xbee: XbeeHandle,
     pub snowman1: Packet,
     pub snowman2: Packet,
     pub tree1: Packet,
@@ -21,7 +21,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(xbee: Xbee) -> Self {
+    pub fn new(xbee: XbeeHandle) -> Self {
         Self {
             xbee,
             snowman1: SNOWMAN1,

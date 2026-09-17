@@ -104,6 +104,7 @@ pub struct UiState {
     pub status_message: Option<String>,
     pub is_error: bool,
     pub device_connected: bool,
+    pub simulated: bool,
 }
 
 impl Default for UiState {
@@ -117,6 +118,7 @@ impl Default for UiState {
             status_message: Some("System Ready - Listening for commands".to_string()),
             is_error: false,
             device_connected: true,
+            simulated: false, // Default is real ftdi
         }
     }
 }
@@ -210,7 +212,9 @@ fn render_header(frame: &mut Frame, area: Rect, state: &UiState) {
         .alignment(Alignment::Left);
     frame.render_widget(title_para, header_chunks[0]);
 
-    let (conn_text, conn_color) = if state.device_connected {
+    let (conn_text, conn_color) = if state.simulated {
+        ("◆ SIMULATED", Color::Magenta)
+    } else if state.device_connected {
         ("● ONLINE", Color::Green)
     } else {
         ("○ OFFLINE", Color::Red)
