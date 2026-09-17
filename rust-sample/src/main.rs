@@ -11,11 +11,11 @@ use xbee::{Xbee, XbeeHandle, SimXbee};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let simulate = parse_args();
+    let (simulate, log_path) = parse_args();
 
     let xbee = if simulate {
         eprintln!("Running in --simulate mode");
-        XbeeHandle::Simulated(SimXbee::new(None)?)
+        XbeeHandle::Simulated(SimXbee::new(log_path.as_deref())?)
     } else {
     
         // 1. Enumerate FTDI devices matching FT232 (VID 0x0403, PID 0x6001)
@@ -58,6 +58,13 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn parse_args() -> bool {
-    std::env::args().any(|a| a == "--simulate" || a == "-s")
+fn parse_args() -> (bool, Option<std::path::PathBuf>) {
+    let args: Vec<String> = std::env::args().collect();
+    let simulate = args.iter().any(|a| a == "--simulate" || a == "-s");
+    let log_path = args
+        .iter()
+        .position(|a| a == "--log" || a == "-l")
+        .and_then(|i| args.get(i + 1))
+        .map(std::path::PathBuf::from);
+    (simulate, log_path)
 }
