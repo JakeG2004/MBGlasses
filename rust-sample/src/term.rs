@@ -16,6 +16,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 use ratatui::Terminal as RatatuiTerminal;
 
+use crate::catalog::Catalog;
 use crate::patterns::PACKET_LEN;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,71 +28,65 @@ pub enum LoopStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandInfo {
     pub key: char,
-    pub name: &'static str,
-    pub desc: &'static str,
+    pub name: String,
+    pub desc: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoutineCategory {
-    pub title: &'static str,
+    pub title: String,
     pub commands: Vec<CommandInfo>,
 }
 
-pub fn get_categories() -> Vec<RoutineCategory> {
-    vec![
-        RoutineCategory {
-            title: "Flashes & Solids",
-            commands: vec![
-                CommandInfo { key: 'r', name: "Red Flash", desc: "Solid red pulse" },
-                CommandInfo { key: 'e', name: "Green Flash", desc: "Solid green pulse" },
-                CommandInfo { key: 'b', name: "Blue Flash", desc: "Solid blue pulse" },
-                CommandInfo { key: 'g', name: "Gold Flash", desc: "Gold/yellow pulse" },
-                CommandInfo { key: 'w', name: "White Flash", desc: "White pulse" },
-                CommandInfo { key: 'm', name: "Magenta Flash", desc: "Magenta pulse" },
-                CommandInfo { key: 'y', name: "Yellow Flash", desc: "Yellow pulse" },
-                CommandInfo { key: 'k', name: "Cyan Flash", desc: "Cyan pulse" },
-                CommandInfo { key: 'd', name: "Dark", desc: "All channels off" },
-                CommandInfo { key: 'n', name: "Gold Loop", desc: "Continuous gold hold" },
-                CommandInfo { key: 'o', name: "White Loop", desc: "Continuous white hold" },
-            ],
-        },
-        RoutineCategory {
-            title: "Twinkles & Sparkles",
-            commands: vec![
-                CommandInfo { key: 'a', name: "Asterion Twinkle", desc: "12-step twinkle loop" },
-                CommandInfo { key: 'c', name: "Christmas Sparkle", desc: "4-phase sparkle loop" },
-                CommandInfo { key: 'q', name: "Sparkle Cycle", desc: "Rainbow sparkle loop" },
-                CommandInfo { key: 'x', name: "Christmas Solid", desc: "Solid holiday hold" },
-                CommandInfo { key: 'z', name: "Slow Twinkle", desc: "Slow holiday shimmer" },
-                CommandInfo { key: 'f', name: "Twink 8", desc: "Twinkle step 8 pulse" },
-                CommandInfo { key: 'h', name: "Twink 9", desc: "Twinkle step 9 pulse" },
-                CommandInfo { key: 'j', name: "Twink 10", desc: "Twinkle step 10 pulse" },
-                CommandInfo { key: 'l', name: "Twink 11", desc: "Twinkle step 11 pulse" },
-            ],
-        },
-        RoutineCategory {
-            title: "Animations & Marquees",
-            commands: vec![
-                CommandInfo { key: 's', name: "Rainbow Short", desc: "4-color rainbow pass" },
-                CommandInfo { key: 'p', name: "Rainbow Med", desc: "Multi-stage rainbow sweep" },
-                CommandInfo { key: '[', name: "Marquee Left", desc: "Scrolling left loop" },
-                CommandInfo { key: ']', name: "Marquee Right", desc: "Scrolling right loop" },
-                CommandInfo { key: '6', name: "Falldown", desc: "Cascading channel drop" },
-                CommandInfo { key: '7', name: "Channel Stagger", desc: "Continuous channel stagger" },
-            ],
-        },
-        RoutineCategory {
-            title: "Holiday & Specials",
-            commands: vec![
-                CommandInfo { key: '1', name: "Snowman 1", desc: "Snowman rotation loop" },
-                CommandInfo { key: '2', name: "Snowman 2", desc: "Snowman alternate loop" },
-                CommandInfo { key: '3', name: "Tree 1", desc: "Gold/Red tree sparkle loop" },
-                CommandInfo { key: '4', name: "Tree 2", desc: "White/Red/Gold tree loop" },
-                CommandInfo { key: '5', name: "Idaho Spelloff", desc: "V-A-N-D-A-L-S sequence" },
-                CommandInfo { key: 't', name: "Test RGB", desc: "RGB channel test loop" },
-            ],
-        },
-    ]
+/// Preferred dashboard card order. New categories from show files are appended.
+pub const DEFAULT_CATEGORY_TITLES: [&str; 4] = [
+    "Flashes & Solids",
+    "Twinkles & Sparkles",
+    "Animations & Marquees",
+    "Holiday & Specials",
+];
+
+/// Build command cards from whatever shows the catalog loaded.
+#[must_use]
+pub fn get_categories(catalog: &Catalog) -> Vec<RoutineCategory> {
+    use std::collections::BTreeMap;
+
+    let mut by_cat: BTreeMap<String, Vec<CommandInfo>> = BTreeMap::new();
+    for show in catalog.shows() {
+        by_cat
+            .entry(show.category.clone())
+            .or_default()
+            .push(CommandInfo {
+                key: show.key,
+                name: show.name.clone(),
+                desc: show.desc.clone(),
+            });
+    }
+    for commands in by_cat.values_mut() {
+        commands.sort_by_key(|cmd| cmd.key);
+    }
+
+    let mut titles: Vec<String> = DEFAULT_CATEGORY_TITLES
+        .iter()
+        .map(|title| (*title).to_owned())
+        .collect();
+    for title in by_cat.keys() {
+        if !titles.iter().any(|existing| existing == title) {
+            titles.push(title.clone());
+        }
+    }
+
+    titles
+        .into_iter()
+        .filter_map(|title| {
+            let commands = by_cat.remove(&title)?;
+            if commands.is_empty() {
+                None
+            } else {
+                Some(RoutineCategory { title, commands })
+            }
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,6 +96,7 @@ pub struct UiState {
     pub last_key: Option<char>,
     pub packet_count: u64,
     pub last_packet: [u8; PACKET_LEN],
+    pub categories: Vec<RoutineCategory>,
     pub status_message: Option<String>,
     pub is_error: bool,
     pub device_connected: bool,
@@ -114,6 +110,7 @@ impl Default for UiState {
             last_key: None,
             packet_count: 0,
             last_packet: [0; PACKET_LEN],
+            categories: Vec::new(),
             status_message: Some("System Ready - Listening for commands".to_string()),
             is_error: false,
             device_connected: true,
@@ -127,6 +124,10 @@ pub struct Terminal {
 
 impl Terminal {
     /// Initializes terminal raw mode and alternate screen with Ratatui backend (RAII).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if enabling raw mode, entering the alternate screen, hiding the cursor, or initializing the Ratatui backend fails.
     pub fn new() -> Result<Self> {
         enable_raw_mode()?;
         let mut stdout = stdout();
@@ -136,7 +137,11 @@ impl Terminal {
         Ok(Self { inner })
     }
 
-    /// Draws the complete UI frame using the provided UiState snapshot.
+    /// Draws the complete UI frame using the provided `UiState` snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if drawing the frame onto the terminal backend fails.
     pub fn draw(&mut self, state: &UiState) -> Result<()> {
         self.inner.draw(|frame| {
             render_ui(frame, state);
@@ -145,6 +150,7 @@ impl Terminal {
     }
 
     /// Non-blocking keyboard poll. Maps Ctrl-C to `Some('.')`.
+    #[must_use] 
     pub fn poll_key() -> Option<char> {
         if let Ok(true) = event::poll(Duration::ZERO)
             && let Ok(Event::Key(key_event)) = event::read()
@@ -178,7 +184,7 @@ pub fn render_ui(frame: &mut Frame, state: &UiState) {
         .split(size);
 
     render_header(frame, main_chunks[0], state);
-    render_command_grid(frame, main_chunks[1]);
+    render_command_grid(frame, main_chunks[1], state);
     render_status_and_preview(frame, main_chunks[2], state);
     render_footer(frame, main_chunks[3]);
 }
@@ -235,8 +241,8 @@ fn render_header(frame: &mut Frame, area: Rect, state: &UiState) {
     frame.render_widget(status_para, header_chunks[1]);
 }
 
-fn render_command_grid(frame: &mut Frame, area: Rect) {
-    let categories = get_categories();
+fn render_command_grid(frame: &mut Frame, area: Rect, state: &UiState) {
+    let categories = &state.categories;
     let grid_rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -267,7 +273,7 @@ fn render_command_grid(frame: &mut Frame, area: Rect) {
                     format!("[{}] ", cmd.key),
                     Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(cmd.name, Style::default().fg(Color::White)),
+                Span::styled(cmd.name.as_str(), Style::default().fg(Color::White)),
                 Span::styled(format!(" - {}", cmd.desc), Style::default().fg(Color::DarkGray)),
             ]));
         }
@@ -314,7 +320,7 @@ fn render_status_and_preview(frame: &mut Frame, area: Rect, state: &UiState) {
     };
 
     let key_display = match state.last_key {
-        Some(k) => format!("'{}'", k),
+        Some(k) => format!("'{k}'"),
         None => "None".to_string(),
     };
 
@@ -409,8 +415,39 @@ impl Drop for Terminal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+
     use ratatui::backend::TestBackend;
     use ratatui::Terminal as RatatuiTerminal;
+
+    use crate::catalog::{Op, Show, Wait};
+    use crate::patterns::{DARK, WHITE};
+
+    fn sample_catalog() -> Catalog {
+        let show = |key, name: &str, category: &str| Show {
+            key,
+            name: name.to_owned(),
+            category: category.to_owned(),
+            desc: "test cue".to_owned(),
+            looping: key == 'c',
+            program: vec![Op::Hold {
+                frame: "white".to_owned(),
+                wait: Wait::Ms(1),
+            }],
+        };
+        let frames = HashMap::from([
+            ("white".to_owned(), WHITE),
+            ("dark".to_owned(), DARK),
+        ]);
+        Catalog::new(
+            frames,
+            vec![
+                show('w', "White Flash", "Flashes & Solids"),
+                show('c', "Christmas Sparkle", "Twinkles & Sparkles"),
+            ],
+        )
+        .expect("catalog")
+    }
 
     #[test]
     fn test_default_ui_state() {
@@ -420,19 +457,17 @@ mod tests {
         assert_eq!(state.packet_count, 0);
         assert!(!state.is_error);
         assert!(state.device_connected);
+        assert!(state.categories.is_empty());
     }
 
     #[test]
-    fn test_categories_and_commands() {
-        let categories = get_categories();
-        assert_eq!(categories.len(), 4);
+    fn test_categories_from_catalog() {
+        let categories = get_categories(&sample_catalog());
+        assert_eq!(categories.len(), 2);
         assert_eq!(categories[0].title, "Flashes & Solids");
         assert_eq!(categories[1].title, "Twinkles & Sparkles");
-        assert_eq!(categories[2].title, "Animations & Marquees");
-        assert_eq!(categories[3].title, "Holiday & Specials");
-
-        let total_commands: usize = categories.iter().map(|c| c.commands.len()).sum();
-        assert!(total_commands >= 25);
+        assert_eq!(categories[0].commands[0].name, "White Flash");
+        assert_eq!(categories[1].commands[0].key, 'c');
     }
 
     #[test]
@@ -459,6 +494,7 @@ mod tests {
         let backend = TestBackend::new(120, 30);
         let mut terminal = RatatuiTerminal::new(backend).unwrap();
         let mut state = UiState::default();
+        state.categories = get_categories(&sample_catalog());
         state.current_routine = "Christmas Sparkle".to_string();
         state.loop_status = LoopStatus::Looping;
         state.last_key = Some('c');
