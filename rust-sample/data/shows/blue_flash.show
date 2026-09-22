@@ -1,0 +1,10 @@
+Show(
+    key: 'b',
+    name: "Blue Flash",
+    category: "Flashes & Solids",
+    desc: "Solid blue pulse",
+    looping: false,
+    program: [
+        Hold(frame: "blue", wait: "dab"),
+    ],
+)

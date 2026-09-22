@@ -1,0 +1,10 @@
+Show(
+    key: 'g',
+    name: "Gold Flash",
+    category: "Flashes & Solids",
+    desc: "Gold/yellow pulse",
+    looping: false,
+    program: [
+        Hold(frame: "gold", wait: "dab"),
+    ],
+)

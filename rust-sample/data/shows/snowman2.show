@@ -1,0 +1,16 @@
+Show(
+    key: '2',
+    name: "Snowman 2",
+    category: "Holiday & Specials",
+    desc: "Snowman alternate loop",
+    looping: true,
+    program: [
+        LoadWorking(frame: "snowman2"),
+        HoldWorking(wait: "slp"),
+        Rotate13,
+        Hold(frame: "dark", wait: "slp"),
+        HoldWorking(wait: "slp"),
+        Rotate13,
+        Hold(frame: "dark", wait: "slp"),
+    ],
+)

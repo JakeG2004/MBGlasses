@@ -1,0 +1,10 @@
+Show(
+    key: 'm',
+    name: "Magenta Flash",
+    category: "Flashes & Solids",
+    desc: "Magenta pulse",
+    looping: false,
+    program: [
+        Hold(frame: "magenta", wait: "dab"),
+    ],
+)

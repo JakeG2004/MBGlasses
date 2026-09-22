@@ -1,0 +1,10 @@
+Show(
+    key: 'r',
+    name: "Red Flash",
+    category: "Flashes & Solids",
+    desc: "Solid red pulse",
+    looping: false,
+    program: [
+        Hold(frame: "red", wait: "dab"),
+    ],
+)

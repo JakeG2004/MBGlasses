@@ -1,0 +1,10 @@
+Show(
+    key: 'k',
+    name: "Cyan Flash",
+    category: "Flashes & Solids",
+    desc: "Cyan pulse",
+    looping: false,
+    program: [
+        Hold(frame: "cyan", wait: "dab"),
+    ],
+)

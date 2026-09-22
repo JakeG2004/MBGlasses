@@ -1,0 +1,17 @@
+Show(
+    key: 'c',
+    name: "Christmas Sparkle",
+    category: "Twinkles & Sparkles",
+    desc: "4-phase sparkle loop",
+    looping: true,
+    program: [
+        Hold(frame: "x1", wait: "slp"),
+        Hold(frame: "dark", wait: "slp"),
+        Hold(frame: "x2", wait: "slp"),
+        Hold(frame: "dark", wait: "slp"),
+        Hold(frame: "x3", wait: "slp"),
+        Hold(frame: "dark", wait: "slp"),
+        Hold(frame: "x4", wait: "slp"),
+        Hold(frame: "dark", wait: "slp"),
+    ],
+)

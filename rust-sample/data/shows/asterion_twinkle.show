@@ -1,0 +1,21 @@
+Show(
+    key: 'a',
+    name: "Asterion Twinkle",
+    category: "Twinkles & Sparkles",
+    desc: "12-step twinkle loop",
+    looping: true,
+    program: [
+        Hold(frame: "twnk1", wait: "drool"),
+        Hold(frame: "twnk2", wait: "drool"),
+        Hold(frame: "twnk3", wait: "drool"),
+        Hold(frame: "twnk4", wait: "drool"),
+        Hold(frame: "twnk5", wait: "drool"),
+        Hold(frame: "twnk6", wait: "drool"),
+        Hold(frame: "twnk7", wait: "drool"),
+        Hold(frame: "twnk8", wait: "drool"),
+        Hold(frame: "twnk9", wait: "drool"),
+        Hold(frame: "twnk10", wait: "drool"),
+        Hold(frame: "twnk11", wait: "drool"),
+        Hold(frame: "twnk12", wait: "drool"),
+    ],
+)

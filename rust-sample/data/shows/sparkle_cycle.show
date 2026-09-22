@@ -1,0 +1,17 @@
+Show(
+    key: 'q',
+    name: "Sparkle Cycle",
+    category: "Twinkles & Sparkles",
+    desc: "Rainbow sparkle loop",
+    looping: true,
+    program: [
+        Hold(frame: "rain1", wait: "slp"),
+        Hold(frame: "dark", wait: "slp"),
+        Hold(frame: "rain2", wait: "slp"),
+        Hold(frame: "dark", wait: "slp"),
+        Hold(frame: "rain3", wait: "slp"),
+        Hold(frame: "dark", wait: "slp"),
+        Hold(frame: "rain4", wait: "slp"),
+        Hold(frame: "dark", wait: "slp"),
+    ],
+)
