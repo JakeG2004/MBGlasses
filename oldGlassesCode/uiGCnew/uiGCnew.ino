@@ -3,6 +3,7 @@
 
 #include "mrf24j.h"
 #include <SPI.h>
+#include <util/atomic.h>
 
 /*
 * uiGC0 
@@ -49,7 +50,7 @@ void setup() {
   mrf.set_channel(0x0C);
   mrf.address16_write(0x4202);
   mrf.set_promiscuous(true);
-  mrf.set_bufferPHY(true);
+  mrf.set_bufferPHY(false);
   
   attachInterrupt(0, interrupt_routine, CHANGE);
   interrupts();
@@ -91,7 +92,22 @@ void loop()
 
 void handle_rx()
 {
-  setColor(mrf.get_rxinfo()->rx_data[startId],mrf.get_rxinfo()->rx_data[startId+1],mrf.get_rxinfo()->rx_data[startId+2]);
+  uint8_t red = 0, green = 0, blue = 0;
+  bool complete = false;
+  // Snapshot only the selected triplet; PWM updates and SPI stay outside.
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    int length = mrf.rx_datalength();
+    if (length >= startId + 3) {
+      rx_info_t *info = mrf.get_rxinfo();
+      red = info->rx_data[startId];
+      green = info->rx_data[startId + 1];
+      blue = info->rx_data[startId + 2];
+      complete = true;
+    }
+  }
+  if (complete) {
+    setColor(red, green, blue);
+  }
   mrf.rx_flush();
 }
 
