@@ -488,6 +488,23 @@ impl App {
                     }
                 }
             }
+            Some('v') => {
+                self.ui_state.current_routine = "RGB Cycle".to_string();
+                self.ui_state.loop_status = LoopStatus::Looping;
+                let mut phase: f32 = 0.0;
+                loop {
+                    let myterm = Terminal::poll_key();
+                    let pkt = rgb_gradient(phase);
+                    self.flash(&pkt, DAB, term).await;
+                    phase = (phase + 4.0) % 360.0;
+                    if myterm == Some(',') {
+                        self.ui_state.loop_status = LoopStatus::Idle;
+                        self.ui_state.current_routine = "IDLE".to_string();
+                        let _ = term.draw(&self.ui_state);
+                        break;
+                    }
+                }
+            }
             Some('.') => {
                 self.ui_state.status_message = Some("Shutting down...".to_string());
                 let _ = term.draw(&self.ui_state);

@@ -1007,6 +1007,37 @@ pub fn marquee_right(arr: &mut Packet) {
     arr.rotate_right(3);
 }
 
+pub fn hsv_to_rgb(h: f32, s: f32, v:f32) -> (u8, u8, u8) {
+    let c = v * s;
+    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+    let m = v - c;
+    let (r1, g1, b1) = match h as u32 {
+        0..=59 => (c, x, 0.0),
+        60..=119 => (x, c, 0.0),
+        120..=179 => (0.0, c, x),
+        180..=239 => (0.0, x, c),
+        240..=299 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    (
+        ((r1 + m) * 255.0).round() as u8,
+        ((g1 + m) * 255.0).round() as u8,
+        ((b1 + m) * 255.0).round() as u8,
+    )
+}
+
+pub fn rgb_gradient(phase: f32) -> Packet {
+    let mut pkt = [0u8; PACKET_LEN];
+    for ch in 0..CHANNELS {
+        let hue = (phase + ch as f32 * 360.0 / CHANNELS as f32) % 360.0;
+        let (r, g, b) = hsv_to_rgb(hue, 1.0, 1.0);
+        pkt[ch * 3] = r;
+        pkt[ch * 3 + 1] = g;
+        pkt[ch * 3 + 2] = b;
+    }
+    pkt
+}
+
 
 #[cfg(test)]
 mod tests {
