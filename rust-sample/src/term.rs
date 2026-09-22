@@ -74,6 +74,7 @@ pub fn get_categories() -> Vec<RoutineCategory> {
             commands: vec![
                 CommandInfo { key: 's', name: "Rainbow Short", desc: "4-color rainbow pass" },
                 CommandInfo { key: 'p', name: "Rainbow Med", desc: "Multi-stage rainbow sweep" },
+                CommandInfo { key: 'v', name: "RGB Gradient", desc: "Full RGB range gradient pattern" },
                 CommandInfo { key: '[', name: "Marquee Left", desc: "Scrolling left loop" },
                 CommandInfo { key: ']', name: "Marquee Right", desc: "Scrolling right loop" },
                 CommandInfo { key: '6', name: "Falldown", desc: "Cascading channel drop" },
