@@ -1,0 +1,1 @@
+gcc -o ht13 ht13.c -lftdi -lcurses
