@@ -81,7 +81,7 @@ void handle_tx()
 {
 }
 
-void setColor(uint8_t color)
+void setColor(uint8_t color) // Example Gold = 248 
 {
   int red = ((color >> 5) & 0b00000111) * 36;
   int green = ((color >> 2) & 0b00000111) * 36;
