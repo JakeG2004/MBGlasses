@@ -6,4 +6,5 @@
 
 ## Help
 * [Programming the Glasses With ISP](./Program_ISP.md)
+* [Programming the Glasses With Serial](./Program_Serial.md)
 * [Code](../../../oldGlassesCode/uiGC0/)
