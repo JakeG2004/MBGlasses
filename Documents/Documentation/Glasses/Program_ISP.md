@@ -33,7 +33,7 @@ In order to program the glasses using ISP, you will need a few things
     1) Remove the MRF wireless receiver
     2) Use the red wire to connect 5v on the Arduino to the VCC header on the glasses (3rd in on the right when looking at the glasses PCB right side up)
     3) Use the black wire to connect ground on the Arduino to ground on the Glasses (bottom right connector on the MRF connector)
-    4) Use the white wire to connect pin 13 on the Arduino to the upper right hand connector in the MRF connector
+    4) Use the white wire to connect pin 13 on the Arduino to the upper left hand connector in the MRF connector
     5) Use the blue cable to connect pin 12 on the Arduino to the bottom left connector in the MRF connector
     6) Use the green wire to connect pin 11 on the Arduino to the connector immediately next to the white wire on the MRF connector
     7) Use the orange wire to connect pin 10 on the Arduino to the reset through hole on the glasses PCB (may be under tape, rightmost hole)

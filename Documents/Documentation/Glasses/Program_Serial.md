@@ -24,7 +24,8 @@ In order to program the glasses using Serial, you will need a few things
     1) Looking at the glasses board right side up, connect the furthest right pin (gnd) to gnd on your Arduino.
     2) connect the 3rd pin from the right (5v) to 5v on your Arduino
     3) Connect the 4th pin from the right (TX) to RX on your Arduino
-    4) Connecr the 5th pin from the right (RX) to TX on your Arduino
+    4) Connect the 5th pin from the right (RX) to TX on your Arduino
+    5) Connect your Arduino's ground to your Arduino's reset
 
     <table style="width:100%; border:none;">
     <tr>
