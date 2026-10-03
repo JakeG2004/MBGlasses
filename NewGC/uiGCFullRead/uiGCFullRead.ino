@@ -5,15 +5,26 @@
 #include "mrf24j.h"
 #include <SPI.h>
 
+
+// Pin mappings for DS (DipSwitches)
+#define DS1 14
+#define DS2 15
+#define DS3 16
+#define DS4 17
+#define DS5 18
+#define DS6 19
+#define DS7 9
+#define DS8 10
+
 /*
 * uiGC0 
 * Goofy Controller 0
 * common cathode LEDs +
 * Mrf24j40
 * 
-* Derek McNee | Team Prism
+* Derek McNee
 * University of Idaho
-* 9/27/2026
+* 10/03/2026
 * 
 */
 
@@ -23,26 +34,41 @@ int bluePin = 5;
 int pin_reset = 6;
 int pin_cs = 8;
 int pin_interrupt = 2;
-int idVal;
-int interrupt_flag = 0;
+uint8_t idVal = 0;
+volatile uint8_t interrupt_flag = 0;
+
+uint8_t readID()
+{
+  const uint8_t pins[8] = {DS1, DS2, DS3, DS4, DS5, DS6, DS7, DS8};
+  uint8_t id = 0;
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    pinMode(pins[i], INPUT_PULLUP);
+    if (digitalRead(pins[i]) == LOW) 
+      id |= (1 << i);
+  }
+  return id;
+}
 
 Mrf24j mrf(pin_reset, pin_cs, pin_interrupt);
 
 void setup() {
-  DDRC = 0x00;
+  idVal = readID();
+
+  // The read for the ID interferes with radio stuff
+  // This fixes it after the ID is read
+  pinMode(10, OUTPUT);
+  digitalWrite(10, HIGH);
+  SPCR |= _BV(MSTR); 
+
   SoftPWMBegin();
   SoftPWMSet(redPin, 0);
   SoftPWMSet(greenPin, 0);
   pinMode(bluePin, OUTPUT);
   SoftPWMSetFadeTime(redPin, 10, 10);
   SoftPWMSetFadeTime(greenPin, 10, 10);
-  
-  digitalWrite(A0,HIGH);
-  digitalWrite(A1, HIGH);
-  digitalWrite(A2, HIGH);
-  digitalWrite(A3, HIGH);
 
-  setColor(0,0,0);
+  setColor(0);
   
   mrf.reset();
   mrf.init();
@@ -54,7 +80,6 @@ void setup() {
   
   attachInterrupt(0, interrupt_routine, CHANGE);
   interrupts();
-  idVal = ~PINC & 0x0f;
 }
 
 void interrupt_routine()
