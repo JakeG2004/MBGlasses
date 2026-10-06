@@ -79,12 +79,12 @@ void loop()
     for(uint8_t i = 0; i < 256; i++)
     {
       setColor(snake332(i));
-      delay(50);
+      delay(200);
     }
   } else {
     for(int i = 0; i < 34; i++){
       setColor(COLORS[i]);
-      delay(50);
+      delay(200);
     }
   }
 }
