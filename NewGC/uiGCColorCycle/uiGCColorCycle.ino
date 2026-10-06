@@ -20,15 +20,6 @@ int redPin = 3;
 int greenPin = 4;
 int bluePin = 5;
 
-const COLORS = [
-  224, 228, 232, 240, 244, 248, 252,
-  220, 188, 156, 124, 92, 60, 28,
-  29, 30, 31,
-  27, 23, 19, 15, 11, 7, 3,
-  35, 67, 99, 131, 163, 195, 227,
-  226, 225
-];
-
 uint8_t snake332(uint8_t n) {
   uint8_t r_i = n >> 5;
   uint8_t g_i = (n >> 2) & 7;
@@ -48,7 +39,7 @@ void setup() {
   SoftPWMSetFadeTime(redPin, 10, 10);
   SoftPWMSetFadeTime(greenPin, 10, 10);
 
-  setColor(0,0,0);
+  setColor(0);
 }
 
 void loop()
