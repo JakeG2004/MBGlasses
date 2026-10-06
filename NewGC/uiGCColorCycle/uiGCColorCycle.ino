@@ -4,6 +4,15 @@
 
 #include <SPI.h>
 
+#define DS1 14
+#define DS2 15
+#define DS3 16
+#define DS4 17
+#define DS5 18
+#define DS6 19
+#define DS7 9
+#define DS8 10
+
 /*
 * uiGC0 
 * Goofy Controller 0
@@ -19,6 +28,28 @@
 int redPin = 3;
 int greenPin = 4;
 int bluePin = 5;
+
+uint8_t readID()
+{
+  const uint8_t pins[8] = {DS1, DS2, DS3, DS4, DS5, DS6, DS7, DS8};
+  uint8_t id = 0;
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    pinMode(pins[i], INPUT_PULLUP);
+    if (digitalRead(pins[i]) == LOW) 
+      id |= (1 << i);
+  }
+  return id;
+}
+
+uint8_t COLORS[34] = {
+  224, 228, 232, 240, 244, 248, 252,
+  220, 188, 156, 124, 92, 60, 28,
+  29, 30, 31,
+  27, 23, 19, 15, 11, 7, 3,
+  35, 67, 99, 131, 163, 195, 227,
+  226, 225
+};
 
 uint8_t snake332(uint8_t n) {
   uint8_t r_i = n >> 5;
@@ -44,10 +75,17 @@ void setup() {
 
 void loop()
 {
-  for(uint8_t i = 0; i < 256; i++)
-  {
-    setColor(snake332(i));
-    delay(100);
+  if(readID() == 0) {
+    for(uint8_t i = 0; i < 256; i++)
+    {
+      setColor(snake332(i));
+      delay(50);
+    }
+  } else {
+    for(int i = 0; i < 34; i++){
+      setColor(COLORS[i]);
+      delay(50);
+    }
   }
 }
 
