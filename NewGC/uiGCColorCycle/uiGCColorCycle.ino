@@ -29,7 +29,7 @@ const COLORS = [
   226, 225
 ];
 
-uint8_t snake332(uint8_t) {
+uint8_t snake332(uint8_t n) {
   uint8_t r_i = n >> 5;
   uint8_t g_i = (n >> 2) & 7;
   uint8_t b_i = n & 3;
