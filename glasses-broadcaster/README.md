@@ -106,6 +106,8 @@ The repository-root workflow [`.github/workflows/glasses-broadcaster.yml`](../.g
 
 The workflow installs the latest stable Rust toolchain; `rust-toolchain.toml` also selects `stable` for local development. Run `rustup update stable` to update your local compiler. Keep `Cargo.lock` committed; CI uses `--locked` to prevent dependency resolution from changing during a build.
 
+Dependabot checks this project's Cargo dependencies and the repository's GitHub Actions weekly, configured in [`.github/dependabot.yml`](../.github/dependabot.yml). It opens pull requests to update dependencies, including `Cargo.toml` and `Cargo.lock` as needed. These pull requests run through the same CI checks; this configuration does not enable automatic merging.
+
 Run the same checks from `glasses-broadcaster/`:
 
 ```bash
