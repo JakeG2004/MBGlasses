@@ -28,7 +28,7 @@ The objective is to produce a comprehensive, structured `README.md` in `rust-sam
 ### Functional Requirements
 - High visual legibility using structured tables, code fences, and Markdown formatting.
 - Accurate mapping of all 25+ show routines and their keybindings.
-- Direct alignment with the implementation in `rust-sample/src/`.
+- Direct alignment with the implementation in `../../glasses-broadcaster/src`.
 
 # Technical Design
 
@@ -41,7 +41,7 @@ The `rust-sample` directory contains the `band-lighthshow` crate (Rust edition 2
 - `src/timing.rs`: Microsecond timing constants (`DAB`, `SLP`, `DASH`, `DOT`, `FAST`, `SLO`, `DROOL`, etc.).
 - `src/xbee.rs`: `ftdi-nusb` async driver, 97-byte wire packet constructor, and serial communication.
 
-### Document Structure for `rust-sample/README.md`
+### Document Structure for `../../glasses-broadcaster/README.md`
 1. **Title & Badge Header**: Project name, version, edition, and high-level description.
 2. **Features**: Summary of Ratatui TUI, pure Rust USB driver, and zero-latency microsecond timing.
 3. **Hardware Architecture & Wiring**:
@@ -85,7 +85,7 @@ graph TD
 # Delivery Steps
 
 ### * Step 1: Draft Project Overview, Hardware Architecture, and Prerequisites
-The root section of `rust-sample/README.md` will contain the project summary, hardware requirements, and system setup instructions.
+The root section of `../../glasses-broadcaster/README.md` will contain the project summary, hardware requirements, and system setup instructions.
 
 - Document the project purpose: Ben's Halftime Light Show Toolkit ported to Rust edition 2024 with a Ratatui TUI.
 - Specify the required hardware stack: FTDI FT232 USB-to-UART adapter (VID 0x0403, PID 0x6001), 57600 baud 8N1 link, XBee transmitter, and 32-channel RGB wireless glasses receivers.

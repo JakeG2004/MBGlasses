@@ -95,12 +95,12 @@ graph LR
 ### File Structure
 | File | Action |
 | :--- | :--- |
-| `rust-sample/src/patterns.rs` | Add HSV + `rainbow_drift_packet`; unit tests |
-| `rust-sample/data/frames/rainbow_drift.frame` | New FrameSet, 180 packets |
-| `rust-sample/data/shows/full_rgb.show` | Replace 7-mix program with 180 Holds |
-| `rust-sample/src/catalog.rs` | Fixture assertions for drift frames / `'u'` |
-| `rust-sample/src/engine.rs` / `runtime.rs` | Unchanged |
-| `rust-sample/data/frames/full_rgb.frame` | Unchanged |
+| `../../glasses-broadcaster/src` | Add HSV + `rainbow_drift_packet`; unit tests |
+| `../../glasses-broadcaster/data` | New FrameSet, 180 packets |
+| `../../glasses-broadcaster/data` | Replace 7-mix program with 180 Holds |
+| `../../glasses-broadcaster/src` | Fixture assertions for drift frames / `'u'` |
+| `../../glasses-broadcaster/src` / `runtime.rs` | Unchanged |
+| `../../glasses-broadcaster/data` | Unchanged |
 
 ### Risks
 - **Repo size:** one ~70KB FrameSet is acceptable; do not split into 180 files.
@@ -130,20 +130,20 @@ Unit tests only (no FTDI). Patterns tests for HSV/rainbow math; `Catalog::load` 
 ### ✓ Step 1: Add HSV helper and rainbow packet builder
 `patterns.rs` can compute a 32-channel spatial rainbow for any 2° phase step.
 
-- Add `hsv_to_rgb` (standard 6-sector, `h` in 0..=360) and `rainbow_drift_packet(step)` in `rust-sample/src/patterns.rs`.
+- Add `hsv_to_rgb` (standard 6-sector, `h` in 0..=360) and `rainbow_drift_packet(step)` in `../../glasses-broadcaster/src`.
 - Channel `i` uses `hue = (step * 2 + i * 360 / 32) % 360` at full saturation/value.
 - Unit-test primary hues and a couple of spatial spots (ch 0 vs ch 16 at step 0).
 
 ### ✓ Step 2: Check in the 180-frame FrameSet
 All drift packets exist on disk as one `FrameSet` the catalog already knows how to load.
 
-- Add `rust-sample/data/frames/rainbow_drift.frame` with keys `rd_000`…`rd_179`.
+- Add `../../glasses-broadcaster/data` with keys `rd_000`…`rd_179`.
 - Payload for `rd_NNN` is exactly `rainbow_drift_packet(NNN)` (generate from the helper, do not hand-edit RGB).
 - Do not add 180 separate `.frame` files.
 
 ### ✓ Step 3: Replace the u show and catalog fixtures
 Pressing `u` loops the spatial rainbow at `slp` with no blank frames.
 
-- Rewrite `rust-sample/data/shows/full_rgb.show`: name `Rainbow Drift`, category `Animations & Marquees`, `looping: true`, 180 `Hold`s `rd_000`…`rd_179` with `wait: "slp"`.
+- Rewrite `../../glasses-broadcaster/data`: name `Rainbow Drift`, category `Animations & Marquees`, `looping: true`, 180 `Hold`s `rd_000`…`rd_179` with `wait: "slp"`.
 - Update `load_repo_fixtures` in `catalog.rs` for the new name, length 180, `slp`, no blanks, and spot-check frames against `rainbow_drift_packet`.
 - Leave `test_rgb.show`, `engine.rs`, `runtime.rs`, and `full_rgb.frame` unchanged.
