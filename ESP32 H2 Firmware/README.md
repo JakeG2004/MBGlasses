@@ -105,6 +105,54 @@ replaces the receiver firmware on that board. The broadcaster does not print the
 receiver startup messages above. Close Serial Monitor before connecting the
 host broadcaster application, since both would otherwise compete for the port.
 
+## Changing the radio channel
+
+**The currently configured radio channel is `12` (2410 MHz), matching the
+existing hardware.** Both `esp32h2-broadcaster.ino` and `esp32h2-glasses.ino`
+use `static const uint8_t kChannel = 12;`. Keep channel `12` when communicating
+with existing glasses that still listen on that channel.
+
+The ESP32-H2 supports IEEE 802.15.4 radio channels `11–26` in the 2.4 GHz band;
+these are not Wi-Fi channel numbers. A broadcaster and every receiver belonging
+to its show must use the same radio channel. Changing only the broadcaster will
+stop glasses still listening on the old channel from receiving it.
+
+For two independent shows at the same location, for example:
+
+| Show | Broadcaster radio channel | Glasses radio channel |
+| --- | --- | --- |
+| Existing hardware | `12` (unchanged) | `12` (unchanged) |
+| New ESP32-H2 hardware | `25` | `25` |
+
+To move the new ESP32-H2 show to channel `25`:
+
+1. In both `esp32h2-broadcaster.ino` and `esp32h2-glasses.ino`, replace
+   `static const uint8_t kChannel = 12;` with:
+
+   ```cpp
+   static const uint8_t kChannel = 25;
+   ```
+
+   Edit the copies in the separate Arduino sketch folders you will upload, or
+   update the source files here and recopy each into its respective sketch
+   folder. Leave `kPanId` and the other settings unchanged for a channel-only
+   change. The receiver's color-channel/DIP-switch ID does not select the radio
+   channel.
+2. Compile and upload the broadcaster sketch to the new show's broadcaster,
+   using the board settings and upload procedure above. Compile and upload the
+   receiver sketch to **every ESP32-H2 receiver in that show**. Leave the existing
+   show's hardware on channel `12`; uploading only the broadcaster is not enough.
+3. Reset each updated receiver and check Serial Monitor at **115200 baud**. Its
+   startup banner should now contain `radio ch 25` instead of `radio ch 12`.
+   Close Serial Monitor before connecting the host broadcaster application.
+4. Send a test color from each show's broadcaster and confirm that only its own
+   glasses respond. Then run both shows together to check operation at the venue.
+
+Channel changes require recompiling and reflashing; the host application's RGB
+frames do not retune the radios. Separate channels reduce interference but do
+not guarantee interference-free operation, so consider local Wi-Fi usage when
+choosing channels.
+
 ## References
 
 - [Espressif: installing Arduino-ESP32](https://docs.espressif.com/projects/arduino-esp32/en/latest/installing.html)
