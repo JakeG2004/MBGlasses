@@ -1,0 +1,57 @@
+name: Glasses broadcaster CI
+
+on:
+  push:
+    paths:
+      - "glasses-broadcaster/**"
+      - ".github/workflows/glasses-broadcaster.yml"
+  pull_request:
+    paths:
+      - "glasses-broadcaster/**"
+      - ".github/workflows/glasses-broadcaster.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: glasses-broadcaster
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Build, test, and lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends pkg-config libudev-dev
+
+      - name: Install stable Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy --component rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check Clippy warnings
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --locked --all-features
+
+      - name: Build release application
+        run: cargo build --locked --release --all-features

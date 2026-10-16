@@ -74,7 +74,8 @@ The light show system relies on a wireless broadcast topology from a central hos
 
 ### System & Environment Prerequisites
 
-* **Rust Toolchain**: Rust compiler supporting **Edition 2024** (Rust 1.85 or newer recommended) with `cargo`.
+* **Rust Toolchain**: Install Rust through `rustup`; `rust-toolchain.toml` selects the rolling **stable** channel with `clippy` and `rustfmt` for local development and CI.
+* **Linux Build Dependencies**: On Ubuntu/Debian, install `pkg-config` and `libudev-dev` (`sudo apt-get install pkg-config libudev-dev`) for `serialport` device enumeration.
 * **Hardware Connection**: An FTDI FT232 USB UART device connected to an available host USB port.
 * **OS & USB Permissions**:
   * **Linux**: Userspace USB access via `nusb` requires read/write permissions on the FTDI USB device node. Create a `udev` rule (e.g., in `/etc/udev/rules.d/99-ftdi.rules` matching `ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", MODE="0666", GROUP="plugdev"`) or ensure the user is part of the `dialout`/`plugdev` group.
@@ -96,6 +97,23 @@ The application is built on modern asynchronous and terminal libraries:
 | **`anyhow`** | `1.0.104` | Flexible error handling and contextual error propagation across application entry points. |
 | **`serde`** | `1.0.229` | Serialization/deserialization framework (`derive` feature) for data models and pattern structures. |
 | **`ron`** | `0.12.2` | Rusty Object Notation deserializer/serializer for pattern and configuration schemas. |
+
+---
+
+## Continuous integration
+
+The repository-root workflow [`.github/workflows/glasses-broadcaster.yml`](../.github/workflows/glasses-broadcaster.yml) runs on pushes and pull requests that change this project or the workflow itself, and can also be started manually. On Ubuntu 24.04 it checks formatting, rejects all Clippy warnings, runs the tests, and builds the release application. No broadcast hardware is needed for these checks.
+
+The workflow installs the latest stable Rust toolchain; `rust-toolchain.toml` also selects `stable` for local development. Run `rustup update stable` to update your local compiler. Keep `Cargo.lock` committed; CI uses `--locked` to prevent dependency resolution from changing during a build.
+
+Run the same checks from `glasses-broadcaster/`:
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo test --locked --all-features
+cargo build --locked --release --all-features
+```
 
 ---
 
