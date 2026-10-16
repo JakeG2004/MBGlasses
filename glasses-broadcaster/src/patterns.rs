@@ -6,50 +6,52 @@ pub const DARK: Packet = [0; PACKET_LEN];
 
 /// Warm white used by tests and the default fixture frame.
 pub const WHITE: Packet = [
-    255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215,
-    255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215,
-    255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215,
-    255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215,
-    255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215,
-    255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215,
-    255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215,
-    255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215,
+    255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255,
+    255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255,
+    215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215,
+    255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255,
+    255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255, 215, 255, 255,
+    215,
 ];
 
 /// Full-intensity RGB white `(255,255,255)` on every channel.
 /// Distinct from warm [`WHITE`] `(255,255,215)`.
 pub const FULL_RGB: Packet = [255; PACKET_LEN];
 
-/// Convert HSV to RGB. `h` is degrees in `0..=360` (360 wraps to 0).
-pub fn hsv_to_rgb(h: u16, s: u8, v: u8) -> [u8; 3] {
-    let h = h % 360;
-    if s == 0 {
-        return [v, v, v];
+/// Convert HSV to RGB. `hue` is degrees in `0..=360` (360 wraps to 0).
+#[must_use]
+pub fn hsv_to_rgb(hue: u16, saturation: u8, value: u8) -> [u8; 3] {
+    let hue = hue % 360;
+    if saturation == 0 {
+        return [value, value, value];
     }
-    let region = h / 60;
-    let remainder = (h % 60) as u32;
-    let s = s as u32;
-    let v = v as u32;
-    let p = v * (255 - s) / 255;
-    let q = v * (255 - s * remainder / 60) / 255;
-    let t = v * (255 - s * (60 - remainder) / 60) / 255;
+    let region = hue / 60;
+    let remainder = u32::from(hue % 60);
+    let saturation = u32::from(saturation);
+    let value = u32::from(value);
+    let p_val = value * (255 - saturation) / 255;
+    let q_val = value * (255 - saturation * remainder / 60) / 255;
+    let t_val = value * (255 - saturation * (60 - remainder) / 60) / 255;
+    let byte = |x: u32| u8::try_from(x).unwrap_or(u8::MAX);
+    let (v_byte, p_byte, q_byte, t_byte) = (byte(value), byte(p_val), byte(q_val), byte(t_val));
     match region {
-        0 => [v as u8, t as u8, p as u8],
-        1 => [q as u8, v as u8, p as u8],
-        2 => [p as u8, v as u8, t as u8],
-        3 => [p as u8, q as u8, v as u8],
-        4 => [t as u8, p as u8, v as u8],
-        _ => [v as u8, p as u8, q as u8],
+        0 => [v_byte, t_byte, p_byte],
+        1 => [q_byte, v_byte, p_byte],
+        2 => [p_byte, v_byte, t_byte],
+        3 => [p_byte, q_byte, v_byte],
+        4 => [t_byte, p_byte, v_byte],
+        _ => [v_byte, p_byte, q_byte],
     }
 }
 
 /// Spatial rainbow at 2° phase `step` (`0..180`).
 ///
 /// Channel `i` uses hue `(step * 2 + i * 360 / 32) % 360` at full saturation/value.
+#[must_use]
 pub fn rainbow_drift_packet(step: u16) -> Packet {
     let mut packet = [0u8; PACKET_LEN];
     for i in 0..CHANNELS {
-        let hue = (step * 2 + (i as u16) * 360 / 32) % 360;
+        let hue = (step * 2 + u16::try_from(i).unwrap_or(0) * 360 / 32) % 360;
         let rgb = hsv_to_rgb(hue, 255, 255);
         let offset = i * 3;
         packet[offset] = rgb[0];
@@ -140,22 +142,28 @@ mod tests {
     fn test_rotate13() {
         let mut pkt = [0u8; 96];
         for i in 0..32 {
-            pkt[i * 3] = i as u8;
-            pkt[i * 3 + 1] = (i + 100) as u8;
-            pkt[i * 3 + 2] = (i + 200) as u8;
+            pkt[i * 3] = u8::try_from(i).unwrap();
+            pkt[i * 3 + 1] = u8::try_from(i + 100).unwrap();
+            pkt[i * 3 + 2] = u8::try_from(i + 200).unwrap();
         }
         let original = pkt;
         rotate13(&mut pkt);
 
         for ch in 0..12 {
-            assert_eq!(&pkt[ch * 3..ch * 3 + 3], &original[(ch + 1) * 3..(ch + 1) * 3 + 3]);
+            assert_eq!(
+                &pkt[ch * 3..ch * 3 + 3],
+                &original[(ch + 1) * 3..(ch + 1) * 3 + 3]
+            );
         }
         assert_eq!(&pkt[12 * 3..12 * 3 + 3], &original[12 * 3..12 * 3 + 3]);
         assert_eq!(&pkt[13 * 3..13 * 3 + 3], &original[0..3]);
         assert_eq!(&pkt[14 * 3..14 * 3 + 3], &original[14 * 3..14 * 3 + 3]);
         assert_eq!(&pkt[15 * 3..15 * 3 + 3], &original[15 * 3..15 * 3 + 3]);
         for ch in 16..28 {
-            assert_eq!(&pkt[ch * 3..ch * 3 + 3], &original[(ch + 1) * 3..(ch + 1) * 3 + 3]);
+            assert_eq!(
+                &pkt[ch * 3..ch * 3 + 3],
+                &original[(ch + 1) * 3..(ch + 1) * 3 + 3]
+            );
         }
         assert_eq!(&pkt[28 * 3..28 * 3 + 3], &original[28 * 3..28 * 3 + 3]);
         for ch in 29..32 {
@@ -167,7 +175,7 @@ mod tests {
     fn test_marquee() {
         let mut pkt = [0u8; PACKET_LEN];
         for i in 0..CHANNELS {
-            pkt[i * 3] = i as u8;
+            pkt[i * 3] = u8::try_from(i).unwrap();
             pkt[i * 3 + 1] = 10;
             pkt[i * 3 + 2] = 20;
         }

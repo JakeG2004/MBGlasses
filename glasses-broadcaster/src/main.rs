@@ -71,8 +71,7 @@ async fn main() -> anyhow::Result<()> {
     let device_connected = device.is_some();
     let port_label = device
         .as_ref()
-        .map(band_lighthshow::link::BroadcastLink::label)
-        .unwrap_or("DRY RUN")
+        .map_or("DRY RUN", band_lighthshow::link::BroadcastLink::label)
         .to_owned();
 
     let term = match Terminal::new() {
@@ -97,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
     let (usb_tx, usb_rx) = mpsc::channel(8);
     let (ui_tx, ui_rx) = watch::channel(ui.clone());
 
-    let input = tokio::task::spawn_blocking(move || runtime::input_loop(key_tx));
+    let input = tokio::task::spawn_blocking(move || runtime::input_loop(&key_tx));
     let tui = tokio::spawn(runtime::tui_task(term, ui_rx, shutdown_rx));
     let usb = tokio::spawn(runtime::usb_task(device, pkt_rx, usb_tx));
 

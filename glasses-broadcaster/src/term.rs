@@ -1,4 +1,4 @@
-use std::io::{stdout, Stdout};
+use std::io::{Stdout, stdout};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -6,15 +6,15 @@ use crossterm::cursor::{Hide, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
+use ratatui::Frame;
+use ratatui::Terminal as RatatuiTerminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Wrap};
-use ratatui::Frame;
-use ratatui::Terminal as RatatuiTerminal;
 
 use crate::catalog::Catalog;
 use crate::patterns::PACKET_LEN;
@@ -152,7 +152,7 @@ impl Terminal {
     }
 
     /// Non-blocking keyboard poll. Maps Ctrl-C to `Some('.')`.
-    #[must_use] 
+    #[must_use]
     pub fn poll_key() -> Option<char> {
         if let Ok(true) = event::poll(Duration::ZERO)
             && let Ok(Event::Key(key_event)) = event::read()
@@ -178,10 +178,10 @@ pub fn render_ui(frame: &mut Frame, state: &UiState) {
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Header
-            Constraint::Min(12),    // Command cards grid
-            Constraint::Length(7),  // Status & Visualizer panel
-            Constraint::Length(1),  // Footer keybar
+            Constraint::Length(3), // Header
+            Constraint::Min(12),   // Command cards grid
+            Constraint::Length(7), // Status & Visualizer panel
+            Constraint::Length(1), // Footer keybar
         ])
         .split(size);
 
@@ -194,17 +194,16 @@ pub fn render_ui(frame: &mut Frame, state: &UiState) {
 fn render_header(frame: &mut Frame, area: Rect, state: &UiState) {
     let header_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(50),
-            Constraint::Percentage(50),
-        ])
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(area);
 
     let title_line = Line::from(vec![
         Span::styled("⚡ ", Style::default().fg(Color::Yellow)),
         Span::styled(
             "Ben's Halftime Light Show Toolkit",
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         ),
     ]);
 
@@ -232,7 +231,10 @@ fn render_header(frame: &mut Frame, area: Rect, state: &UiState) {
         ),
         Span::styled("| ", Style::default().fg(Color::DarkGray)),
         Span::styled("STATUS: ", Style::default().fg(Color::DarkGray)),
-        Span::styled(conn_text, Style::default().fg(conn_color).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            conn_text,
+            Style::default().fg(conn_color).add_modifier(Modifier::BOLD),
+        ),
     ]);
 
     let status_para = Paragraph::new(status_line)
@@ -276,10 +278,15 @@ fn render_command_grid(frame: &mut Frame, area: Rect, state: &UiState) {
             lines.push(Line::from(vec![
                 Span::styled(
                     format!("[{}] ", cmd.key),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(cmd.name.as_str(), Style::default().fg(Color::White)),
-                Span::styled(format!(" - {}", cmd.desc), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!(" - {}", cmd.desc),
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]));
         }
 
@@ -305,7 +312,11 @@ fn render_command_grid(frame: &mut Frame, area: Rect, state: &UiState) {
 fn render_status_and_preview(frame: &mut Frame, area: Rect, state: &UiState) {
     let block = Block::default()
         .title(" System Status & Channel Visualizer ")
-        .title_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
+        .title_style(
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        )
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::DarkGray));
@@ -314,13 +325,12 @@ fn render_status_and_preview(frame: &mut Frame, area: Rect, state: &UiState) {
     frame.render_widget(block, area);
 
     let (loop_text, loop_style) = match state.loop_status {
-        LoopStatus::Idle => (
-            "[IDLE]",
-            Style::default().fg(Color::DarkGray),
-        ),
+        LoopStatus::Idle => ("[IDLE]", Style::default().fg(Color::DarkGray)),
         LoopStatus::Looping => (
             "[LOOPING]",
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         ),
     };
 
@@ -333,7 +343,9 @@ fn render_status_and_preview(frame: &mut Frame, area: Rect, state: &UiState) {
         Span::styled("ROUTINE: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
             &state.current_routine,
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::raw("  "),
         Span::styled(loop_text, loop_style),
@@ -344,14 +356,17 @@ fn render_status_and_preview(frame: &mut Frame, area: Rect, state: &UiState) {
         Span::styled("PACKETS: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
             format!("{}", state.packet_count),
-            Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
         ),
     ]);
 
     // Visualizer line for 32 RGB channels
-    let mut vis_spans = vec![
-        Span::styled("CHANNELS (1-32): ", Style::default().fg(Color::DarkGray)),
-    ];
+    let mut vis_spans = vec![Span::styled(
+        "CHANNELS (1-32): ",
+        Style::default().fg(Color::DarkGray),
+    )];
     for ch in 0..32 {
         let r = state.last_packet[ch * 3];
         let g = state.last_packet[ch * 3 + 1];
@@ -370,7 +385,10 @@ fn render_status_and_preview(frame: &mut Frame, area: Rect, state: &UiState) {
     // Message line
     let line3 = if state.is_error {
         Line::from(vec![
-            Span::styled("ERROR: ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "ERROR: ",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
             Span::styled(
                 state.status_message.as_deref().unwrap_or("Hardware Error"),
                 Style::default().fg(Color::Red),
@@ -393,16 +411,34 @@ fn render_status_and_preview(frame: &mut Frame, area: Rect, state: &UiState) {
 
 fn render_footer(frame: &mut Frame, area: Rect) {
     let keybar = Line::from(vec![
-        Span::styled(" [,] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [,] ",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled("Stop Loop", Style::default().fg(Color::White)),
         Span::raw("   "),
-        Span::styled(" [.] / [Ctrl-C] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [.] / [Ctrl-C] ",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
         Span::styled("Quit", Style::default().fg(Color::White)),
         Span::raw("   "),
-        Span::styled(" [<] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [<] ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled("Dim", Style::default().fg(Color::DarkGray)),
         Span::raw("   "),
-        Span::styled(" [>] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [>] ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled("Brighten", Style::default().fg(Color::DarkGray)),
     ]);
 
@@ -422,8 +458,8 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    use ratatui::backend::TestBackend;
     use ratatui::Terminal as RatatuiTerminal;
+    use ratatui::backend::TestBackend;
 
     use crate::catalog::{Op, Show, Wait};
     use crate::patterns::{DARK, WHITE};
@@ -440,10 +476,7 @@ mod tests {
                 wait: Wait::Ms(1),
             }],
         };
-        let frames = HashMap::from([
-            ("white".to_owned(), WHITE),
-            ("dark".to_owned(), DARK),
-        ]);
+        let frames = HashMap::from([("white".to_owned(), WHITE), ("dark".to_owned(), DARK)]);
         Catalog::new(
             frames,
             vec![
@@ -462,7 +495,7 @@ mod tests {
         assert_eq!(state.packet_count, 0);
         assert!(!state.is_error);
         assert!(state.device_connected);
-        assert!(state.categories.is_empty());
+        assert_eq!(state.categories, &[]);
     }
 
     #[test]
@@ -499,18 +532,22 @@ mod tests {
     fn test_render_looping_and_error_state() {
         let backend = TestBackend::new(120, 30);
         let mut terminal = RatatuiTerminal::new(backend).unwrap();
-        let mut state = UiState::default();
-        state.categories = get_categories(&sample_catalog());
-        state.current_routine = "Christmas Sparkle".to_string();
-        state.loop_status = LoopStatus::Looping;
-        state.last_key = Some('c');
-        state.packet_count = 42;
-        state.is_error = true;
-        state.port_label = "ESP32-H2 USB".to_string();
-        state.status_message = Some("USB timeout writing endpoint".to_string());
-        state.last_packet[0] = 255;
-        state.last_packet[1] = 0;
-        state.last_packet[2] = 0;
+        let state = UiState {
+            categories: get_categories(&sample_catalog()),
+            current_routine: "Christmas Sparkle".to_string(),
+            loop_status: LoopStatus::Looping,
+            last_key: Some('c'),
+            packet_count: 42,
+            is_error: true,
+            port_label: "ESP32-H2 USB".to_string(),
+            status_message: Some("USB timeout writing endpoint".to_string()),
+            last_packet: {
+                let mut p = [0u8; 96];
+                p[0] = 255;
+                p
+            },
+            ..UiState::default()
+        };
 
         terminal
             .draw(|f| {

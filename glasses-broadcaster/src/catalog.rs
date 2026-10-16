@@ -3,10 +3,10 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
-use crate::patterns::{Packet, PACKET_LEN};
+use crate::patterns::{PACKET_LEN, Packet};
 use crate::timing;
 
 /// Named 96-byte RGB frame stored on disk.
@@ -61,11 +61,15 @@ pub enum Wait {
 
 impl Wait {
     /// Resolve this wait to a duration using [`timing`] names when needed.
+    ///
+    /// # Errors
+    /// Returns an error if a named wait identifier is unknown.
     pub fn duration(&self) -> Result<Duration> {
         match self {
             Self::Ms(ms) => Ok(Duration::from_millis(*ms)),
-            Self::Named(name) => timing::duration_for(name)
-                .with_context(|| format!("unknown wait name `{name}`")),
+            Self::Named(name) => {
+                timing::duration_for(name).with_context(|| format!("unknown wait name `{name}`"))
+            }
         }
     }
 }
@@ -74,20 +78,18 @@ impl Op {
     fn wait(&self) -> Option<&Wait> {
         match self {
             Self::Hold { wait, .. } | Self::HoldWorking { wait } => Some(wait),
-            Self::LoadWorking { .. }
-            | Self::Rotate13
-            | Self::MarqueeLeft
-            | Self::MarqueeRight => None,
+            Self::LoadWorking { .. } | Self::Rotate13 | Self::MarqueeLeft | Self::MarqueeRight => {
+                None
+            }
         }
     }
 
     fn frame_name(&self) -> Option<&str> {
         match self {
             Self::Hold { frame, .. } | Self::LoadWorking { frame } => Some(frame.as_str()),
-            Self::HoldWorking { .. }
-            | Self::Rotate13
-            | Self::MarqueeLeft
-            | Self::MarqueeRight => None,
+            Self::HoldWorking { .. } | Self::Rotate13 | Self::MarqueeLeft | Self::MarqueeRight => {
+                None
+            }
         }
     }
 }
@@ -101,6 +103,10 @@ pub struct Catalog {
 
 impl Catalog {
     /// Merge frames and shows, rejecting duplicate hotkeys and unknown frame refs.
+    ///
+    /// # Errors
+    /// Returns an error if there are duplicate show hotkeys or if a show references
+    /// an unknown frame or wait identifier.
     pub fn new(frames: HashMap<String, Packet>, shows: Vec<Show>) -> Result<Self> {
         let mut by_key: HashMap<char, Show> = HashMap::with_capacity(shows.len());
         for show in shows {
@@ -113,18 +119,15 @@ impl Catalog {
                 );
             }
             for op in &show.program {
-                if let Some(frame) = op.frame_name() {
-                    if !frames.contains_key(frame) {
-                        bail!(
-                            "show '{}' references unknown frame `{frame}`",
-                            show.name
-                        );
-                    }
+                if let Some(frame) = op.frame_name()
+                    && !frames.contains_key(frame)
+                {
+                    bail!("show '{}' references unknown frame `{frame}`", show.name);
                 }
-                if let Some(Wait::Named(name)) = op.wait() {
-                    if timing::duration_for(name).is_none() {
-                        bail!("show '{}' has unknown wait name `{name}`", show.name);
-                    }
+                if let Some(Wait::Named(name)) = op.wait()
+                    && timing::duration_for(name).is_none()
+                {
+                    bail!("show '{}' has unknown wait name `{name}`", show.name);
                 }
             }
             by_key.insert(show.key, show);
@@ -136,6 +139,10 @@ impl Catalog {
     }
 
     /// Load `frames/` and `shows/` under `data_dir` (default `data`).
+    ///
+    /// # Errors
+    /// Returns an error if the directory cannot be read, or if any frame or show file
+    /// fails parsing or validation.
     pub fn load(data_dir: impl AsRef<Path>) -> Result<Self> {
         let data_dir = data_dir.as_ref();
         let frames = load_frames(&data_dir.join("frames"))?;
@@ -153,8 +160,7 @@ impl Catalog {
         self.shows.get(&key)
     }
 
-    #[must_use]
-    pub fn shows(&self) -> impl Iterator<Item=&Show> {
+    pub fn shows(&self) -> impl Iterator<Item = &Show> {
         self.shows.values()
     }
 
@@ -166,22 +172,34 @@ impl Catalog {
 
 impl Frame {
     /// Convert RGB bytes into a wire packet.
+    ///
+    /// # Errors
+    /// Returns an error if `rgb` length does not match [`PACKET_LEN`].
     pub fn to_packet(&self) -> Result<Packet> {
         vec_to_packet(&self.name, &self.rgb)
     }
 }
 
 /// Parse a single `Frame(...)` document.
+///
+/// # Errors
+/// Returns an error if the RON syntax is invalid or does not match [`Frame`].
 pub fn parse_frame(text: &str) -> Result<Frame> {
     ron::from_str(text).context("parsing Frame RON")
 }
 
 /// Parse a `FrameSet({ ... })` document.
+///
+/// # Errors
+/// Returns an error if the RON syntax is invalid or does not match [`FrameSet`].
 pub fn parse_frame_set(text: &str) -> Result<FrameSet> {
     ron::from_str(text).context("parsing FrameSet RON")
 }
 
 /// Parse a `Show(...)` document.
+///
+/// # Errors
+/// Returns an error if the RON syntax is invalid or does not match [`Show`].
 pub fn parse_show(text: &str) -> Result<Show> {
     ron::from_str(text).context("parsing Show RON")
 }
@@ -199,7 +217,10 @@ fn parse_frame_file(text: &str) -> Result<FrameFile> {
 
 fn vec_to_packet(name: &str, rgb: &[u8]) -> Result<Packet> {
     if rgb.len() != PACKET_LEN {
-        bail!("frame `{name}` has {} bytes, expected {PACKET_LEN}", rgb.len());
+        bail!(
+            "frame `{name}` has {} bytes, expected {PACKET_LEN}",
+            rgb.len()
+        );
     }
     let mut packet = [0u8; PACKET_LEN];
     packet.copy_from_slice(rgb);
@@ -221,17 +242,17 @@ fn load_frames(dir: &Path) -> Result<HashMap<String, Packet>> {
         if path.extension().and_then(|ext| ext.to_str()) != Some("frame") {
             continue;
         }
-        let text = fs::read_to_string(&path)
-            .with_context(|| format!("reading {}", path.display()))?;
-        let file = parse_frame_file(&text)
-            .with_context(|| format!("parsing {}", path.display()))?;
+        let text =
+            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+        let file =
+            parse_frame_file(&text).with_context(|| format!("parsing {}", path.display()))?;
         match file {
             FrameFile::Single(frame) => {
-                insert_frame(&mut frames, frame.name, &frame.rgb, &path)?;
+                insert_frame(&mut frames, &frame.name, &frame.rgb, &path)?;
             }
             FrameFile::Set(FrameSet(set)) => {
                 for (name, rgb) in set {
-                    insert_frame(&mut frames, name, &rgb, &path)?;
+                    insert_frame(&mut frames, &name, &rgb, &path)?;
                 }
             }
         }
@@ -241,17 +262,13 @@ fn load_frames(dir: &Path) -> Result<HashMap<String, Packet>> {
 
 fn insert_frame(
     frames: &mut HashMap<String, Packet>,
-    name: String,
+    name: &str,
     rgb: &[u8],
     path: &Path,
 ) -> Result<()> {
-    let packet = vec_to_packet(&name, rgb)
-        .with_context(|| format!("in {}", path.display()))?;
-    if frames.insert(name.clone(), packet).is_some() {
-        bail!(
-            "duplicate frame name `{name}` (from {})",
-            path.display()
-        );
+    let packet = vec_to_packet(name, rgb).with_context(|| format!("in {}", path.display()))?;
+    if frames.insert(name.to_owned(), packet).is_some() {
+        bail!("duplicate frame name `{name}` (from {})", path.display());
     }
     Ok(())
 }
@@ -271,10 +288,9 @@ fn load_shows(dir: &Path) -> Result<Vec<Show>> {
         if path.extension().and_then(|ext| ext.to_str()) != Some("show") {
             continue;
         }
-        let text = fs::read_to_string(&path)
-            .with_context(|| format!("reading {}", path.display()))?;
-        let show = parse_show(&text)
-            .with_context(|| format!("parsing {}", path.display()))?;
+        let text =
+            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+        let show = parse_show(&text).with_context(|| format!("parsing {}", path.display()))?;
         shows.push(show);
     }
     Ok(shows)
@@ -283,7 +299,7 @@ fn load_shows(dir: &Path) -> Result<Vec<Show>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::patterns::{rainbow_drift_packet, DARK, FULL_RGB, WHITE};
+    use crate::patterns::{DARK, FULL_RGB, WHITE, rainbow_drift_packet};
     use crate::timing::SLP;
 
     const WHITE_FRAME_RON: &str = r#"
@@ -350,7 +366,7 @@ FrameSet({
 })
 "#,
         )
-            .expect("frameset");
+        .expect("frameset");
         assert_eq!(set.0.get("dark").map(Vec::len), Some(PACKET_LEN));
 
         let show = parse_show(SHOW_RON).expect("show");
@@ -387,7 +403,7 @@ Show(
 )
 "#,
         )
-            .expect("looping show");
+        .expect("looping show");
         assert!(looping.looping);
         assert_eq!(looping.program[1], Op::Rotate13);
     }
@@ -448,7 +464,7 @@ Show(
                 hold_show('w', "White B", "white"),
             ],
         )
-            .expect_err("duplicates");
+        .expect_err("duplicates");
         let msg = format!("{err:#}");
         assert!(msg.contains("duplicate hotkey 'w'"), "{msg}");
         assert!(msg.contains("White A"), "{msg}");

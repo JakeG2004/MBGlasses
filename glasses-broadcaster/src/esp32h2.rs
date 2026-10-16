@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use serialport::{DataBits, FlowControl, Parity, SerialPort, SerialPortType, StopBits};
 
-use crate::patterns::{Packet, PACKET_LEN};
+use crate::patterns::{PACKET_LEN, Packet};
 
 /// Espressif USB vendor ID. The ESP32-H2-MINI-1 native USB Serial/JTAG uses this.
 pub const VID: u16 = 0x303A;

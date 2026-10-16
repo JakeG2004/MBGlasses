@@ -9,9 +9,9 @@ use tokio::sync::{mpsc, watch};
 use crate::catalog::Catalog;
 use crate::engine::Player;
 use crate::esp32h2::Esp32H2;
-use crate::link::{resolve, BroadcastLink, DeviceKind, LinkChoice};
-use crate::patterns::{Packet, DARK};
-use crate::term::{get_categories, LoopStatus, Terminal, UiState};
+use crate::link::{BroadcastLink, DeviceKind, LinkChoice, resolve};
+use crate::patterns::{DARK, Packet};
+use crate::term::{LoopStatus, Terminal, UiState, get_categories};
 use crate::xbee::Xbee;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -174,11 +174,10 @@ impl Sequencer {
     }
 
     fn idle_ui(&mut self, message: Option<String>) {
-        self.ui.current_routine = "IDLE".to_owned();
+        "IDLE".clone_into(&mut self.ui.current_routine);
         self.ui.loop_status = LoopStatus::Idle;
-        self.ui.status_message = message.or_else(|| {
-            Some("System Ready - Listening for commands".to_owned())
-        });
+        self.ui.status_message =
+            message.or_else(|| Some("System Ready - Listening for commands".to_owned()));
     }
 
     fn note_packet(&mut self, packet: Packet) -> Packet {
@@ -197,7 +196,11 @@ pub fn list_devices() -> Result<()> {
     let ftdi = Xbee::enumerate()?;
     let esp = Esp32H2::enumerate()?;
 
-    println!("FTDI FT232 (VID {vid:04x} PID {pid:04x}):", vid = crate::xbee::VID, pid = crate::xbee::PID);
+    println!(
+        "FTDI FT232 (VID {vid:04x} PID {pid:04x}):",
+        vid = crate::xbee::VID,
+        pid = crate::xbee::PID
+    );
     if ftdi.is_empty() {
         println!("  (none)");
     }
@@ -280,7 +283,7 @@ fn print_device(index: usize, dev: &DeviceInfo) {
 }
 
 /// Blocking keyboard loop. Only this task reads crossterm events.
-pub fn input_loop(tx: mpsc::Sender<KeyCmd>) {
+pub fn input_loop(tx: &mpsc::Sender<KeyCmd>) {
     loop {
         let ready = event::poll(Duration::from_millis(50)).unwrap_or(false);
         if !ready {
@@ -369,9 +372,9 @@ pub async fn sequencer_task(
 ) {
     let _ = ui.send(sequencer.snapshot());
     loop {
-        let wait = sequencer.deadline().map(|deadline| {
-            deadline.saturating_duration_since(Instant::now())
-        });
+        let wait = sequencer
+            .deadline()
+            .map(|deadline| deadline.saturating_duration_since(Instant::now()));
 
         tokio::select! {
             cmd = keys.recv() => {

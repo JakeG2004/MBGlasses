@@ -1,11 +1,11 @@
-use anyhow::{bail, Context, Result};
-use ftdi_nusb::constants::pid::FT232;
-use ftdi_nusb::constants::FTDI_VID;
-use ftdi_nusb::types::{DataBits, FlowControl, Interface, Parity, StopBits};
+use anyhow::{Context, Result, bail};
 use ftdi_nusb::FtdiDevice;
+use ftdi_nusb::constants::FTDI_VID;
+use ftdi_nusb::constants::pid::FT232;
+use ftdi_nusb::types::{DataBits, FlowControl, Interface, Parity, StopBits};
 use nusb::DeviceInfo;
 
-use crate::patterns::{Packet, PACKET_LEN};
+use crate::patterns::{PACKET_LEN, Packet};
 
 pub const VID: u16 = FTDI_VID; // 0x0403
 pub const PID: u16 = FT232; // 0x6001
@@ -84,7 +84,7 @@ impl Xbee {
     }
 
     /// Constructs the 97-byte wire frame: 96 RGB bytes + trailing 0x00 terminator.
-    #[must_use] 
+    #[must_use]
     pub fn frame(packet: &Packet) -> [u8; WIRE_LEN] {
         let mut wire = [0u8; WIRE_LEN];
         wire[..PACKET_LEN].copy_from_slice(packet);

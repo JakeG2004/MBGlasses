@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use crate::esp32h2::Esp32H2;
 use crate::patterns::Packet;
@@ -114,12 +114,18 @@ mod tests {
 
     #[test]
     fn auto_uses_esp32h2_when_it_is_the_only_device() {
-        assert_eq!(resolve(LinkChoice::Auto, 0, 1).unwrap(), DeviceKind::Esp32H2);
+        assert_eq!(
+            resolve(LinkChoice::Auto, 0, 1).unwrap(),
+            DeviceKind::Esp32H2
+        );
     }
 
     #[test]
     fn explicit_choice_requires_that_device() {
-        assert_eq!(resolve(LinkChoice::Esp32H2, 1, 1).unwrap(), DeviceKind::Esp32H2);
+        assert_eq!(
+            resolve(LinkChoice::Esp32H2, 1, 1).unwrap(),
+            DeviceKind::Esp32H2
+        );
         assert_eq!(resolve(LinkChoice::Ftdi, 1, 0).unwrap(), DeviceKind::Ftdi);
         assert!(resolve(LinkChoice::Esp32H2, 1, 0).is_err());
         assert!(resolve(LinkChoice::Ftdi, 0, 1).is_err());

@@ -1,9 +1,9 @@
 use std::time::Instant;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::catalog::{Catalog, Op, Show, Wait};
-use crate::patterns::{marquee_left, marquee_right, rotate13, Packet, DARK};
+use crate::patterns::{DARK, Packet, marquee_left, marquee_right, rotate13};
 
 /// Full brightness is a no-op multiply on emit.
 pub const BRIGHTNESS_MAX: u8 = 255;
@@ -79,12 +79,10 @@ impl Player {
     }
 
     /// Load `show` and run until the first emit (or finish).
-    pub fn start(
-        &mut self,
-        show: &Show,
-        catalog: &Catalog,
-        now: Instant,
-    ) -> Result<Option<Step>> {
+    ///
+    /// # Errors
+    /// Returns an error if the show references unknown frames or timings, or fails execution.
+    pub fn start(&mut self, show: &Show, catalog: &Catalog, now: Instant) -> Result<Option<Step>> {
         self.program.clone_from(&show.program);
         self.pc = 0;
         self.looping = show.looping;
@@ -103,18 +101,21 @@ impl Player {
         self.looping = false;
         self.running = false;
         self.deadline = None;
-        self.show_name = "IDLE".to_owned();
+        "IDLE".clone_into(&mut self.show_name);
     }
 
     /// Advance when `now` has reached the current deadline.
+    ///
+    /// # Errors
+    /// Returns an error if advancing the show program encounters invalid frame/timing references.
     pub fn advance(&mut self, catalog: &Catalog, now: Instant) -> Result<Option<Step>> {
         if !self.running {
             return Ok(None);
         }
-        if let Some(deadline) = self.deadline {
-            if now < deadline {
-                return Ok(None);
-            }
+        if let Some(deadline) = self.deadline
+            && now < deadline
+        {
+            return Ok(None);
         }
         self.execute_until_wait(catalog, now)
     }
@@ -127,11 +128,7 @@ impl Player {
         self.brightness = self.brightness.saturating_add(BRIGHTNESS_STEP);
     }
 
-    fn execute_until_wait(
-        &mut self,
-        catalog: &Catalog,
-        now: Instant,
-    ) -> Result<Option<Step>> {
+    fn execute_until_wait(&mut self, catalog: &Catalog, now: Instant) -> Result<Option<Step>> {
         if self.program.is_empty() {
             self.finish_idle();
             return Ok(None);
@@ -193,7 +190,7 @@ impl Player {
     fn finish_idle(&mut self) {
         self.running = false;
         self.deadline = None;
-        self.show_name = "IDLE".to_owned();
+        "IDLE".clone_into(&mut self.show_name);
     }
 
     fn emit_frame(&self, catalog: &Catalog, frame: &str) -> Result<Packet> {
@@ -221,8 +218,7 @@ pub fn scale_rgb(packet: &Packet, brightness: u8) -> Packet {
     }
     let mut out = *packet;
     for byte in &mut out {
-        *byte = u8::try_from(u16::from(*byte) * u16::from(brightness) / 255)
-            .unwrap_or(u8::MAX);
+        *byte = u8::try_from(u16::from(*byte) * u16::from(brightness) / 255).unwrap_or(u8::MAX);
     }
     out
 }
@@ -234,7 +230,7 @@ mod tests {
 
     use super::*;
     use crate::catalog::{Show, Wait};
-    use crate::patterns::{marquee_left, rotate13, CHANNELS, WHITE};
+    use crate::patterns::{CHANNELS, WHITE, marquee_left, rotate13};
 
     fn catalog_with(frames: &[(&str, Packet)]) -> Catalog {
         let map = frames
@@ -280,7 +276,12 @@ mod tests {
         assert_eq!(first.deadline, t0 + Duration::from_millis(40));
         assert!(player.is_running());
 
-        assert!(player.advance(&catalog, t0 + Duration::from_millis(39)).unwrap().is_none());
+        assert!(
+            player
+                .advance(&catalog, t0 + Duration::from_millis(39))
+                .unwrap()
+                .is_none()
+        );
 
         let second = player
             .advance(&catalog, first.deadline)
@@ -419,7 +420,10 @@ mod tests {
         let half = scale_rgb(&WHITE, 128);
         assert_ne!(half, WHITE);
         assert_ne!(half, DARK);
-        assert_eq!(half[0], (255u16 * 128 / 255) as u8);
-        assert_eq!(half[CHANNELS * 3 - 1], (215u16 * 128 / 255) as u8);
+        assert_eq!(half[0], u8::try_from(255u16 * 128 / 255).unwrap());
+        assert_eq!(
+            half[CHANNELS * 3 - 1],
+            u8::try_from(215u16 * 128 / 255).unwrap()
+        );
     }
 }
