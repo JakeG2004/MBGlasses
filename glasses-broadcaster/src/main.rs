@@ -1,20 +1,45 @@
 use std::path::PathBuf;
 
 use band_lighthshow::catalog::Catalog;
+use band_lighthshow::link::LinkChoice;
 use band_lighthshow::patterns::Packet;
 use band_lighthshow::runtime::{self, Sequencer};
 use band_lighthshow::term::{Terminal, UiState};
 use clap::Parser;
 use tokio::sync::{mpsc, watch};
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
+enum LinkArg {
+    /// Use the FTDI FT232 if one is connected, otherwise an ESP32-H2
+    Auto,
+    /// Original FTDI FT232 UART broadcaster at 57600 8N1
+    Ftdi,
+    /// ESP32-H2-MINI-1 native USB (VID 0x303A PID 0x1001)
+    Esp32h2,
+}
+
+impl From<LinkArg> for LinkChoice {
+    fn from(value: LinkArg) -> Self {
+        match value {
+            LinkArg::Auto => Self::Auto,
+            LinkArg::Ftdi => Self::Ftdi,
+            LinkArg::Esp32h2 => Self::Esp32H2,
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(version, about = "Marching band light-show operator console")]
 struct Args {
-    /// List matching FTDI devices and exit
+    /// List FTDI and ESP32-H2 broadcast devices and exit
     #[arg(long)]
     list_devices: bool,
 
-    /// Index into the enumerated FTDI list
+    /// Which USB broadcaster to open
+    #[arg(long, value_enum, default_value_t = LinkArg::Auto)]
+    link: LinkArg,
+
+    /// Index into the selected link's device list
     #[arg(long, default_value_t = 0)]
     device: usize,
 
@@ -22,7 +47,7 @@ struct Args {
     #[arg(long, default_value = "data")]
     data_dir: PathBuf,
 
-    /// Run the sequencer without opening FTDI
+    /// Run the sequencer without opening a broadcast device
     #[arg(long)]
     dry_run: bool,
 }
@@ -41,15 +66,20 @@ async fn main() -> anyhow::Result<()> {
     let device = if args.dry_run {
         None
     } else {
-        Some(runtime::open_device(args.device).await?)
+        Some(runtime::open_device(args.link.into(), args.device).await?)
     };
     let device_connected = device.is_some();
+    let port_label = device
+        .as_ref()
+        .map(band_lighthshow::link::BroadcastLink::label)
+        .unwrap_or("DRY RUN")
+        .to_owned();
 
     let term = match Terminal::new() {
         Ok(term) => term,
         Err(err) => {
-            if let Some(xbee) = device {
-                xbee.close().await;
+            if let Some(link) = device {
+                link.close().await;
             }
             return Err(err);
         }
@@ -57,6 +87,7 @@ async fn main() -> anyhow::Result<()> {
 
     let ui = UiState {
         device_connected,
+        port_label,
         ..UiState::default()
     };
 
@@ -78,4 +109,20 @@ async fn main() -> anyhow::Result<()> {
     let _ = input.await;
     println!("End of program.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn link_flag_parses() {
+        let args = Args::parse_from(["band-lighthshow", "--link", "esp32h2", "--dry-run"]);
+        assert_eq!(args.link, LinkArg::Esp32h2);
+        assert!(args.dry_run);
+
+        let auto = Args::parse_from(["band-lighthshow"]);
+        assert_eq!(auto.link, LinkArg::Auto);
+        assert_eq!(LinkChoice::from(auto.link), LinkChoice::Auto);
+    }
 }

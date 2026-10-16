@@ -1,13 +1,15 @@
 use std::future::pending;
 use std::time::{Duration, Instant};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use nusb::DeviceInfo;
 use tokio::sync::{mpsc, watch};
 
 use crate::catalog::Catalog;
 use crate::engine::Player;
+use crate::esp32h2::Esp32H2;
+use crate::link::{resolve, BroadcastLink, DeviceKind, LinkChoice};
 use crate::patterns::{Packet, DARK};
 use crate::term::{get_categories, LoopStatus, Terminal, UiState};
 use crate::xbee::Xbee;
@@ -186,30 +188,89 @@ impl Sequencer {
     }
 }
 
-/// Print enumerated FTDI devices for `--list-devices`.
+/// Print FTDI and ESP32-H2 broadcast devices for `--list-devices`.
+///
+/// # Errors
+///
+/// Returns an error if either USB enumeration fails.
 pub fn list_devices() -> Result<()> {
-    let devices = Xbee::enumerate()?;
-    if devices.is_empty() {
-        println!("no ftdi devices found");
-        return Ok(());
+    let ftdi = Xbee::enumerate()?;
+    let esp = Esp32H2::enumerate()?;
+
+    println!("FTDI FT232 (VID {vid:04x} PID {pid:04x}):", vid = crate::xbee::VID, pid = crate::xbee::PID);
+    if ftdi.is_empty() {
+        println!("  (none)");
     }
-    println!("{} ftdi devices found.", devices.len());
-    for (i, dev) in devices.iter().enumerate() {
-        print_device(i, dev);
+    for (index, dev) in ftdi.iter().enumerate() {
+        print_device(index, dev);
+    }
+
+    println!(
+        "ESP32-H2 USB (VID {vid:04x} PID {pid:04x}):",
+        vid = crate::esp32h2::VID,
+        pid = crate::esp32h2::PID
+    );
+    if esp.is_empty() {
+        println!("  (none)");
+    }
+    for (index, port) in esp.iter().enumerate() {
+        println!(
+            "  [{index}] {}  {} {} serial={}",
+            port.path, port.manufacturer, port.product, port.serial_number
+        );
     }
     Ok(())
 }
 
-/// Open the FTDI at `index` (default 0).
-pub async fn open_device(index: usize) -> Result<Xbee> {
-    let devices = Xbee::enumerate()?;
-    if devices.is_empty() {
-        bail!("no ftdi devices found");
+/// Open the broadcaster selected by `choice` at `index` within that kind.
+///
+/// # Errors
+///
+/// Returns an error if enumeration fails, the requested device is missing, or
+/// the index is out of range.
+pub async fn open_device(choice: LinkChoice, index: usize) -> Result<BroadcastLink> {
+    let ftdi = match Xbee::enumerate() {
+        Ok(devices) => devices,
+        Err(err) if choice == LinkChoice::Esp32H2 => {
+            eprintln!("warning: FTDI enumeration failed: {err}");
+            Vec::new()
+        }
+        Err(err) => return Err(err),
+    };
+    let esp = match Esp32H2::enumerate() {
+        Ok(devices) => devices,
+        Err(err) if choice == LinkChoice::Ftdi => {
+            eprintln!("warning: ESP32-H2 enumeration failed: {err}");
+            Vec::new()
+        }
+        Err(err) => return Err(err),
+    };
+
+    let kind = resolve(choice, ftdi.len(), esp.len())?;
+    if choice == LinkChoice::Auto && !ftdi.is_empty() && !esp.is_empty() {
+        eprintln!(
+            "both an FTDI FT232 and an ESP32-H2 are connected; using the FTDI. Pass --link esp32h2 to broadcast from the module."
+        );
     }
-    let info = devices.into_iter().nth(index).with_context(|| {
-        format!("device index {index} is out of range")
-    })?;
-    Xbee::open(info).await
+
+    match kind {
+        DeviceKind::Ftdi => {
+            let count = ftdi.len();
+            let info = ftdi.into_iter().nth(index).with_context(|| {
+                format!("FTDI device index {index} is out of range ({count} found)")
+            })?;
+            Ok(BroadcastLink::Ftdi(Box::new(Xbee::open(info).await?)))
+        }
+        DeviceKind::Esp32H2 => {
+            let port = esp.get(index).with_context(|| {
+                format!(
+                    "ESP32-H2 device index {index} is out of range ({} found)",
+                    esp.len()
+                )
+            })?;
+            Ok(BroadcastLink::Esp32H2(Esp32H2::open(&port.path)?))
+        }
+    }
 }
 
 fn print_device(index: usize, dev: &DeviceInfo) {
@@ -274,15 +335,15 @@ pub async fn tui_task(
     }
 }
 
-/// Only writer to FTDI. `None` is the `--dry-run` sink.
+/// Only writer to the broadcast link. `None` is the `--dry-run` sink.
 pub async fn usb_task(
-    mut device: Option<Xbee>,
+    mut device: Option<BroadcastLink>,
     mut packets: mpsc::Receiver<Packet>,
     reports: mpsc::Sender<UsbReport>,
 ) {
     while let Some(packet) = packets.recv().await {
         let report = match device.as_mut() {
-            Some(xbee) => match xbee.send(&packet).await {
+            Some(link) => match link.send(&packet).await {
                 Ok(()) => UsbReport::Ok,
                 Err(err) => UsbReport::Err(err.to_string()),
             },
@@ -292,8 +353,8 @@ pub async fn usb_task(
             break;
         }
     }
-    if let Some(xbee) = device.take() {
-        xbee.close().await;
+    if let Some(link) = device.take() {
+        link.close().await;
     }
 }
 

@@ -15,4 +15,5 @@ nusb = "0.2.7"
 ratatui = "0.30.2"
 ron = "0.12.2"
 serde = { version = "1.0.229", features = ["derive"] }
+serialport = "4.10.1"
 tokio = { version = "1.53.1", features = ["rt", "rt-multi-thread", "macros", "time", "sync"] }

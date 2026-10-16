@@ -100,6 +100,7 @@ pub struct UiState {
     pub status_message: Option<String>,
     pub is_error: bool,
     pub device_connected: bool,
+    pub port_label: String,
 }
 
 impl Default for UiState {
@@ -114,6 +115,7 @@ impl Default for UiState {
             status_message: Some("System Ready - Listening for commands".to_string()),
             is_error: false,
             device_connected: true,
+            port_label: "FTDI 57600 8N1".to_string(),
         }
     }
 }
@@ -224,7 +226,10 @@ fn render_header(frame: &mut Frame, area: Rect, state: &UiState) {
 
     let status_line = Line::from(vec![
         Span::styled("PORT: ", Style::default().fg(Color::DarkGray)),
-        Span::styled("FTDI 57600 8N1 ", Style::default().fg(Color::White)),
+        Span::styled(
+            format!("{} ", state.port_label),
+            Style::default().fg(Color::White),
+        ),
         Span::styled("| ", Style::default().fg(Color::DarkGray)),
         Span::styled("STATUS: ", Style::default().fg(Color::DarkGray)),
         Span::styled(conn_text, Style::default().fg(conn_color).add_modifier(Modifier::BOLD)),
@@ -487,6 +492,7 @@ mod tests {
         assert!(content.contains("Ben's Halftime Light Show Toolkit"));
         assert!(content.contains("ONLINE"));
         assert!(content.contains("[IDLE]"));
+        assert!(content.contains("FTDI 57600 8N1"));
     }
 
     #[test]
@@ -500,6 +506,7 @@ mod tests {
         state.last_key = Some('c');
         state.packet_count = 42;
         state.is_error = true;
+        state.port_label = "ESP32-H2 USB".to_string();
         state.status_message = Some("USB timeout writing endpoint".to_string());
         state.last_packet[0] = 255;
         state.last_packet[1] = 0;
@@ -517,6 +524,7 @@ mod tests {
         assert!(content.contains("[LOOPING]"));
         assert!(content.contains("ERROR"));
         assert!(content.contains("USB timeout writing endpoint"));
+        assert!(content.contains("ESP32-H2 USB"));
     }
 
     #[test]

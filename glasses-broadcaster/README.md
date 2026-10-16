@@ -12,8 +12,8 @@ Built with **Rust Edition 2024**, `band-lighthshow` provides an asynchronous, ze
 
 ### Operational Workflow & Startup Flow
 
-1. **FTDI Enumeration**: On startup, the application scans the USB bus for attached FTDI devices matching VID `0x0403` and PID `0x6001` (FT232).
-2. **Device Configuration**: It claims the first available FTDI interface and configures the serial link for **57600 baud, 8N1** (8 data bits, 1 stop bit, no parity) with hardware flow control disabled.
+1. **Broadcast-device enumeration**: On startup, the application looks for an FTDI FT232 (VID `0x0403`, PID `0x6001`) and for an ESP32-H2-MINI-1 on its native USB Serial/JTAG port (VID `0x303A`, PID `0x1001`). `--link auto` (the default) keeps the FTDI path when that dongle is present, and uses the ESP32-H2 when it is the only broadcast device.
+2. **Device configuration**: An FTDI link is claimed and set to **57600 baud, 8N1**. An ESP32-H2 link is the OS CDC serial port for that USB identity; the module ignores the baud rate and reads framed color packets.
 3. **Terminal Initialization**: Enters terminal raw mode and switches to the alternate screen buffer using `crossterm` and `ratatui`.
 4. **State Machine & UI Event Loop**: Launches the interactive dashboard titled **"Ben's Halftime Light Show Toolkit"**, listening for keyboard triggers to execute light routines, compute real-time pattern transitions, and dispatch wire frames.
 5. **Clean Teardown**: Upon exit (`.` or `Ctrl+C`), terminal raw mode and screen buffers are automatically restored, and USB device streams are cleanly flushed and closed.
@@ -65,7 +65,7 @@ The light show system relies on a wireless broadcast topology from a central hos
   * **Baud Rate**: `57600` baud.
   * **Line Properties**: 8 Data Bits, 1 Stop Bit, No Parity (`8N1`).
   * **Flow Control**: Disabled (`FlowControl::Disabled`).
-* **Wireless Transmitter**: XBee 2.4 GHz RF module wired to the FTDI UART output for broadcast transmission.
+* **Wireless Transmitter**: Either an XBee 2.4 GHz RF module wired to the FTDI UART, or an ESP32-H2-MINI-1 connected by its own USB port and running `firmware/esp32h2-broadcaster`. The module transmits the same 96-byte RGB payload on 802.15.4 channel 12, PAN 2015, to the broadcast address.
 * **Wireless Wearable Receivers**: 32-channel RGB receiver units (embedded MRF/Arduino hardware with software PWM driving wearable RGB LED glasses).
 
 ---
@@ -92,6 +92,30 @@ The application is built on modern asynchronous and terminal libraries:
 | **`crossterm`** | `0.29.0` | Cross-platform terminal handling for raw mode, alternate screen buffer, and keyboard event polling. |
 | **`ftdi-nusb`** | `0.3.0` | Pure-Rust async FTDI device driver (with `tokio` support) for device discovery, baud configuration, and raw packet transmission. |
 | **`nusb`** | `0.2.7` | High-performance, cross-platform userspace USB access library backing `ftdi-nusb`. |
+| **`serialport`** | `4.10.1` | CDC-ACM access to the ESP32-H2-MINI-1 USB Serial/JTAG port. |
 | **`anyhow`** | `1.0.104` | Flexible error handling and contextual error propagation across application entry points. |
 | **`serde`** | `1.0.229` | Serialization/deserialization framework (`derive` feature) for data models and pattern structures. |
 | **`ron`** | `0.12.2` | Rusty Object Notation deserializer/serializer for pattern and configuration schemas. |
+
+---
+
+## ESP32-H2-MINI-1 broadcaster
+
+The FTDI + XBee path is unchanged. To broadcast from an ESP32-H2-MINI-1 instead, flash `../ESP32 H2 Firmware/esp32h2-broadcaster.ino`, then start the host with that link.
+
+Arduino settings:
+
+* Board: `ESP32H2 Dev Module`
+* USB CDC On Boot: Enabled
+* Zigbee Mode: Disabled
+* Port: the module's own USB connector (USB Serial/JTAG, VID `0x303A` PID `0x1001`)
+
+```bash
+cargo run -- --list-devices
+cargo run -- --link esp32h2
+cargo run -- --link ftdi
+```
+
+`--link auto` uses the FTDI dongle when it is connected, and the ESP32-H2 when that module is the only broadcast device. `--device N` indexes the list for the link that will actually be opened.
+
+The host sends `A5 5A 60`, then 96 RGB bytes, then the XOR of those 96 bytes. The sketch transmits those 96 bytes as the 802.15.4 payload on channel 12, PAN 2015, destination `0xFFFF`, with no ACK request. Change `kChannel` and `kPanId` in the sketch if the existing XBee was configured differently. Close the Arduino serial monitor before starting the host, or the port will already be open.
