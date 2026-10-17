@@ -1,0 +1,14 @@
+Show(
+    key: '5',
+    name: "Idaho Spelloff",
+    category: "Holiday & Specials",
+    desc: "V-A-N-D-A-L-S sequence",
+    looping: false,
+    program: [
+        Hold(frame: "vandal_i", wait: "slo"),
+        Hold(frame: "vandal_d", wait: "slo"),
+        Hold(frame: "vandal_a", wait: "fast"),
+        Hold(frame: "vandal_h", wait: "fast"),
+        Hold(frame: "vandal_o", wait: "slo"),
+    ],
+)

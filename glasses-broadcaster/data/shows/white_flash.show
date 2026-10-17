@@ -1,0 +1,10 @@
+Show(
+    key: 'w',
+    name: "White Flash",
+    category: "Flashes & Solids",
+    desc: "White pulse",
+    looping: false,
+    program: [
+        Hold(frame: "white", wait: "dab"),
+    ],
+)

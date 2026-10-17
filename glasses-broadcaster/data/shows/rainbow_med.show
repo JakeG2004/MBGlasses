@@ -1,0 +1,17 @@
+Show(
+    key: 'p',
+    name: "Rainbow Med",
+    category: "Animations & Marquees",
+    desc: "Multi-stage rainbow sweep",
+    looping: false,
+    program: [
+        Hold(frame: "rain5", wait: "dash"),
+        Hold(frame: "rain6", wait: "dab"),
+        Hold(frame: "rain6", wait: "dash"),
+        Hold(frame: "rain7", wait: "dab"),
+        Hold(frame: "rain7", wait: "dash"),
+        Hold(frame: "rain8", wait: "dab"),
+        Hold(frame: "rain8", wait: "dash"),
+        Hold(frame: "dark", wait: "dab"),
+    ],
+)

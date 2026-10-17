@@ -1,0 +1,10 @@
+Show(
+    key: 'x',
+    name: "Christmas Solid",
+    category: "Twinkles & Sparkles",
+    desc: "Solid holiday hold",
+    looping: true,
+    program: [
+        Hold(frame: "x1", wait: "drool"),
+    ],
+)

@@ -1,0 +1,14 @@
+Show(
+    key: 't',
+    name: "Test RGB",
+    category: "Holiday & Specials",
+    desc: "RGB channel test loop",
+    looping: true,
+    program: [
+        Hold(frame: "red", wait: "dash"),
+        Hold(frame: "green", wait: "dash"),
+        Hold(frame: "blue", wait: "dash"),
+        Hold(frame: "black", wait: "dash"),
+        Hold(frame: "dark", wait: "dash"),
+    ],
+)
