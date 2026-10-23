@@ -43,7 +43,7 @@ static const uint8_t kShowChannelId = 1;  // single-color mode: RGB lives at id 
 static const uint8_t kStripPinA = D6;     // GPIO7
 static const uint8_t kStripPinB = D7;     // GPIO8 (also the onboard LED pin, now unused)
 static const uint16_t kStripLen = 34;     // LEDs per strip
-static const uint8_t kBrightness = 120;   // 0-255, scales the received colors
+static const uint8_t kBrightness = 255;   // 0-255, scales the received colors
 static const uint8_t kMacHeaderBytes = 9;
 // PHR length still counts the FCS. The H2 replaces those two bytes with RSSI
 // and LQI, so they are not payload. Set this to 0 only if a live dump is
@@ -55,7 +55,7 @@ static const uint32_t kLogPeriodMs = 1000;
 static const uint16_t kBootPulseMs = 250;
 
 // true = per-pixel rainbow, false = whole strip one color.
-static const bool isSerpentine = true;
+static const bool isSerpentine = false;
 
 static const uint8_t channelId = kShowChannelId;
 static const uint8_t startId = kShowChannelId * 3;
