@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use band_lighthshow::catalog::Catalog;
-use band_lighthshow::link::LinkChoice;
-use band_lighthshow::patterns::Packet;
-use band_lighthshow::runtime::{self, Sequencer};
-use band_lighthshow::term::{Terminal, UiState};
+use glasses_broadcaster::catalog::Catalog;
+use glasses_broadcaster::link::LinkChoice;
+use glasses_broadcaster::patterns::Packet;
+use glasses_broadcaster::runtime::{self, Sequencer};
+use glasses_broadcaster::term::{Terminal, UiState};
 use clap::Parser;
 use tokio::sync::{mpsc, watch};
 
@@ -71,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
     let device_connected = device.is_some();
     let port_label = device
         .as_ref()
-        .map_or("DRY RUN", band_lighthshow::link::BroadcastLink::label)
+        .map_or("DRY RUN", glasses_broadcaster::link::BroadcastLink::label)
         .to_owned();
 
     let term = match Terminal::new() {

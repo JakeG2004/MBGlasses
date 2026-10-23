@@ -1,7 +1,16 @@
 [package]
-name = "band-lighthshow"
+name = "glasses-broadcaster"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/JakeG2004/MBGlasses"
+authors = ["Paul Shannon <mewtwo532@gmail.com>", "Jake Gendreau", "Derek McNee", "Darwin Porth"]
+description = "An application that connects to a serial device to broadcast 802.14.4 lighting effects, for the University of Idaho Marching Band."
+
+[package.metadata.wix]
+upgrade-guid = "167CB7C3-243A-41D2-8E59-D28BEEC9F785"
+path-guid = "342BC5F4-C0AE-49C2-860B-10E43D11D739"
+license = false
+eula = false
 
 [lints.clippy]
 pedantic = "warn"
@@ -17,3 +26,8 @@ ron = "0.12.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serialport = "4.10.1"
 tokio = { version = "1.53.1", features = ["rt", "rt-multi-thread", "macros", "time", "sync"] }
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
