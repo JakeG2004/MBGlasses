@@ -12,6 +12,20 @@ path-guid = "342BC5F4-C0AE-49C2-860B-10E43D11D739"
 license = false
 eula = false
 
+[package.metadata.deb]
+maintainer = "Paul Shannon <mewtwo532@gmail.com>"
+section = "utils"
+priority = "optional"
+depends = "$auto"
+maintainer-scripts = "packaging/deb"
+assets = [
+    ["target/release/glasses-broadcaster", "usr/bin/", "755"],
+    ["data/**/*", "usr/share/glasses-broadcaster/data/", "644"],
+    ["packaging/linux/launch.sh", "usr/lib/glasses-broadcaster/launch.sh", "755"],
+    ["packaging/linux/glasses-broadcaster.desktop", "usr/share/applications/", "644"],
+    ["packaging/linux/70-glasses-broadcaster.rules", "usr/lib/udev/rules.d/", "644"],
+]
+
 [lints.clippy]
 pedantic = "warn"
 

@@ -4,6 +4,42 @@
 | :--- | :--- | :--- | :--- |
 | `band-lighthshow` | `0.1.0` | `2024` | Ratatui `0.30` / Crossterm `0.29` |
 
+## Install prebuilt packages
+
+You do **not** need Rust or build tools to install Glasses Broadcaster. Download an installer from [GitHub Releases](https://github.com/JakeG2004/MBGlasses/releases), not GitHub Packages or the source-code archives. Each complete release includes an operating-system/processor download table, release notes, and `SHA256SUMS` for checking downloads.
+
+Choose the file for your exact operating-system version and processor:
+
+| Operating system | Processor | Installer |
+| :--- | :--- | :--- |
+| Windows 10 / 11 | Intel / AMD 64-bit (`x86_64`) | `.msi` |
+| macOS 11 or newer | Apple Silicon (`arm64`) | `.pkg`, unsigned by default |
+| Debian 12 LTS / 13; Ubuntu 22.04 / 24.04 / 26.04 LTS | Intel / AMD 64-bit or ARM64 | `.deb` |
+| Fedora 43 / 44; RHEL 8.10 / 9.8 / 10.2 | Intel / AMD 64-bit or ARM64 | `.rpm` |
+
+Open the downloaded installer; normal administrator prompts are expected.
+
+* **Windows**: Double-click the unsigned `.msi`, then open **Glasses Broadcaster** from the Start menu. The launcher keeps startup errors visible. Windows may show an **Unknown Publisher** or SmartScreen warning because the installer is unsigned. Only install a file downloaded directly from the Releases page above, and compare it with the matching entry in `SHA256SUMS`; do not disable Windows security protections. If unsure, stop and ask your system administrator.
+* **macOS**: Open the `.pkg`, then open **Glasses Broadcaster.app** in **Applications**; it opens the dashboard in Terminal. The default installer is unsigned and may need extra approval: if blocked, use **System Settings → Privacy & Security → Open Anyway**, then retry. Older macOS versions call this **System Preferences → Security & Privacy**. Approve only downloads you trust; do not disable Gatekeeper.
+* **Linux**: Open the `.deb` or `.rpm` with your desktop's native package installer, if available. Launch **Glasses Broadcaster** from the applications menu to open its terminal dashboard. After installation, unplug and reconnect the broadcaster while logged into an active desktop session so device access applies; run the dashboard as your normal user, not as root.
+
+If your Linux desktop has no package installer, open a terminal in the download folder and use the matching command, replacing `FILE` with the downloaded filename:
+
+```bash
+# Debian / Ubuntu
+sudo apt install ./FILE.deb
+# Fedora / RHEL
+sudo dnf install ./FILE.rpm
+```
+
+Installers do not flash broadcaster firmware or replace Windows USB drivers. The hardware preparation and one-time FTDI/WinUSB driver prerequisite below still apply. To update, download and install the newer matching release; there is no automatic updater or APT/DNF repository feed.
+
+### Bundled data and startup checks
+
+Installed packages find their bundled pattern catalog automatically; you do not need to run from the source directory or copy a `data` folder. `--data-dir PATH` is an optional explicit override; `./data` is only a development fallback. `--check-data` validates the catalog without opening USB devices or the dashboard, while `--list-devices` works independently of the catalog.
+
+See the [packaging and release guide](packaging/README.md) for installed paths, maintainer instructions, and verification limits. No physical broadcaster hardware was used in package validation.
+
 ## Overview
 
 **Ben's Halftime Light Show Toolkit** (`band-lighthshow`) is a modern Rust port and interactive terminal controller for synchronized marching band light shows. Originally created by Benjamin Jeffery (University of Idaho) in C/ncurses (`glasses.c`/`ht9.c`), this software controls wearable 32-channel RGB wireless glasses during live field performances.
@@ -72,15 +108,17 @@ The light show system relies on a wireless broadcast topology from a central hos
 
 ## Prerequisites & Dependencies
 
+Rust and build dependencies are needed only for source development, not for the prebuilt installers above.
+
 ### System & Environment Prerequisites
 
 * **Rust Toolchain**: Install Rust through `rustup`; `rust-toolchain.toml` selects the rolling **stable** channel with `clippy` and `rustfmt` for local development and CI.
 * **Linux Build Dependencies**: On Ubuntu/Debian, install `pkg-config` and `libudev-dev` (`sudo apt-get install pkg-config libudev-dev`) for `serialport` device enumeration.
 * **Hardware Connection**: An FTDI FT232 USB UART device connected to an available host USB port.
 * **OS & USB Permissions**:
-  * **Linux**: Userspace USB access via `nusb` requires read/write permissions on the FTDI USB device node. Create a `udev` rule (e.g., in `/etc/udev/rules.d/99-ftdi.rules` matching `ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", MODE="0666", GROUP="plugdev"`) or ensure the user is part of the `dialout`/`plugdev` group.
+  * **Linux**: Packages install device-scoped `udev`/`uaccess` rules for FTDI USB `0403:6001` and ESP32-H2 tty `303a:1001`. An active desktop session and unplug/replug after installation are required. Source installations need equivalent device-scoped access; do not use world-writable rules or run the dashboard as root.
   * **macOS**: Supported natively through userspace USB; ensure no exclusive kernel driver conflicts block direct access via `nusb`.
-  * **Windows**: WinUSB driver configuration via Zadig for the FTDI device if direct userspace USB claiming is required.
+  * **Windows**: One-time WinUSB driver configuration via Zadig for the FTDI device if direct userspace USB claiming is required. This remains a manual prerequisite; installers do not replace drivers.
 
 ### Crate Dependencies (`Cargo.toml`)
 
@@ -102,9 +140,9 @@ The application is built on modern asynchronous and terminal libraries:
 
 ## Continuous integration
 
-The repository-root workflow [`.github/workflows/glasses-broadcaster.yml`](../.github/workflows/glasses-broadcaster.yml) runs on pushes and pull requests that change this project or the workflow itself, and can also be started manually. On Ubuntu 24.04 it checks formatting, rejects all Clippy warnings, runs the tests, and builds the release application. No broadcast hardware is needed for these checks.
+The repository-root workflow [`.github/workflows/glasses-broadcaster.yml`](../.github/workflows/glasses-broadcaster.yml) runs on branch pushes and pull requests that change this project or its workflows, and can also be started manually. On Ubuntu 24.04 it checks formatting, rejects all Clippy warnings, runs the Rust and release-contract tests, and builds the release application. No broadcast hardware is needed for these checks.
 
-The workflow installs the latest stable Rust toolchain; `rust-toolchain.toml` also selects `stable` for local development. Run `rustup update stable` to update your local compiler. Keep `Cargo.lock` committed; CI uses `--locked` to prevent dependency resolution from changing during a build.
+Ordinary checks use the latest stable Rust toolchain; `rust-toolchain.toml` also selects `stable` for local development. The [tag-release workflow](../.github/workflows/glasses-broadcaster-release.yml) calls these checks with the compiler pinned in `packaging/targets.json`, without a duplicate branch-CI run for tags. Run `rustup update stable` to update your local compiler. Keep `Cargo.lock` committed; CI uses `--locked` to prevent dependency resolution from changing during a build.
 
 Dependabot checks this project's Cargo dependencies and the repository's GitHub Actions weekly, configured in [`.github/dependabot.yml`](../.github/dependabot.yml). It opens pull requests to update dependencies, including `Cargo.toml` and `Cargo.lock` as needed. These pull requests run through the same CI checks; this configuration does not enable automatic merging.
 
@@ -115,6 +153,7 @@ cargo fmt --all -- --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-features
 cargo build --locked --release --all-features
+python3 -m unittest discover -s packaging/release -p 'test_*.py' -v
 ```
 
 ---
@@ -131,6 +170,7 @@ Arduino settings:
 * Port: the module's own USB connector (USB Serial/JTAG, VID `0x303A` PID `0x1001`)
 
 ```bash
+cargo run -- --check-data
 cargo run -- --list-devices
 cargo run -- --link esp32h2
 cargo run -- --link ftdi
