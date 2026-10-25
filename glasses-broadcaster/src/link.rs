@@ -53,6 +53,18 @@ impl BroadcastLink {
         }
     }
 
+    /// Check whether the selected physical broadcaster is still connected.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the operating system cannot enumerate devices.
+    pub fn is_connected(&self) -> Result<bool> {
+        match self {
+            Self::Ftdi(xbee) => xbee.is_connected(),
+            Self::Esp32H2(link) => link.is_connected(),
+        }
+    }
+
     /// Flush and release the USB device.
     pub async fn close(self) {
         match self {

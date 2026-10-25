@@ -33,6 +33,7 @@ pub struct PortInfo {
 /// Open CDC-ACM link to an ESP32-H2-MINI-1 running the broadcaster sketch.
 pub struct Esp32H2 {
     port: Box<dyn SerialPort>,
+    path: String,
 }
 
 impl Esp32H2 {
@@ -83,7 +84,10 @@ impl Esp32H2 {
         let _ = port.write_data_terminal_ready(false);
         let _ = port.write_request_to_send(false);
         eprintln!("ESP32-H2 USB {path} opened");
-        Ok(Self { port })
+        Ok(Self {
+            port,
+            path: path.to_owned(),
+        })
     }
 
     /// Write one framed color packet.
@@ -99,6 +103,15 @@ impl Esp32H2 {
             port.flush()?;
             Ok(())
         })
+    }
+
+    /// Check whether this ESP32-H2 serial port is still enumerated.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the OS serial-port list cannot be read.
+    pub fn is_connected(&self) -> Result<bool> {
+        Ok(Self::enumerate()?.iter().any(|port| port.path == self.path))
     }
 
     /// Flush and drop the port.

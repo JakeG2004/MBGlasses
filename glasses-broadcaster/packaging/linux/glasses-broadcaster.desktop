@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Glasses Broadcaster
+Comment=Marching band light-show operator console
+Exec=/usr/lib/glasses-broadcaster/launch.sh
+TryExec=/usr/bin/glasses-broadcaster
+Terminal=true
+Categories=AudioVideo;
+Keywords=marching;band;lights;glasses;
