@@ -14,7 +14,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
 
 use crate::catalog::Catalog;
 use crate::patterns::PACKET_LEN;
@@ -100,6 +100,7 @@ pub struct UiState {
     pub status_message: Option<String>,
     pub is_error: bool,
     pub device_connected: bool,
+    pub removal_warning: bool,
     pub port_label: String,
 }
 
@@ -115,6 +116,7 @@ impl Default for UiState {
             status_message: Some("System Ready - Listening for commands".to_string()),
             is_error: false,
             device_connected: true,
+            removal_warning: false,
             port_label: "FTDI 57600 8N1".to_string(),
         }
     }
@@ -189,6 +191,54 @@ pub fn render_ui(frame: &mut Frame, state: &UiState) {
     render_command_grid(frame, main_chunks[1], state);
     render_status_and_preview(frame, main_chunks[2], state);
     render_footer(frame, main_chunks[3]);
+    if state.removal_warning {
+        render_removal_warning(frame, size);
+    }
+}
+
+fn render_removal_warning(frame: &mut Frame, area: Rect) {
+    let width = area.width.min(68);
+    let height = area.height.min(9);
+    if width == 0 || height == 0 {
+        return;
+    }
+
+    let popup = Rect::new(
+        area.x + area.width.saturating_sub(width) / 2,
+        area.y + area.height.saturating_sub(height) / 2,
+        width,
+        height,
+    );
+    let warning_style = Style::default()
+        .fg(Color::White)
+        .bg(Color::DarkGray)
+        .add_modifier(Modifier::BOLD);
+    let content = vec![
+        Line::from(Span::styled(
+            "The USB transmitter was removed.",
+            warning_style,
+        )),
+        Line::from("Broadcasting has stopped."),
+        Line::from("Reconnect it and restart the application to resume."),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Press Enter or Esc to dismiss  |  . to quit",
+            warning_style,
+        )),
+    ];
+    let dialog = Paragraph::new(content)
+        .block(
+            Block::default()
+                .title(" TRANSMITTER REMOVED ")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Double)
+                .border_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+                .style(Style::default().bg(Color::DarkGray)),
+        )
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true });
+    frame.render_widget(Clear, popup);
+    frame.render_widget(dialog, popup);
 }
 
 fn render_header(frame: &mut Frame, area: Rect, state: &UiState) {
@@ -495,6 +545,7 @@ mod tests {
         assert_eq!(state.packet_count, 0);
         assert!(!state.is_error);
         assert!(state.device_connected);
+        assert!(!state.removal_warning);
         assert_eq!(state.categories, &[]);
     }
 
@@ -565,6 +616,25 @@ mod tests {
     }
 
     #[test]
+    fn test_render_removed_device_warning_over_offline_dashboard() {
+        let backend = TestBackend::new(120, 30);
+        let mut terminal = RatatuiTerminal::new(backend).unwrap();
+        let state = UiState {
+            device_connected: false,
+            removal_warning: true,
+            ..UiState::default()
+        };
+
+        terminal.draw(|frame| render_ui(frame, &state)).unwrap();
+
+        let content = format!("{:?}", terminal.backend().buffer());
+        assert!(content.contains("OFFLINE"));
+        assert!(content.contains("TRANSMITTER REMOVED"));
+        assert!(content.contains("The USB transmitter was removed."));
+        assert!(content.contains("Press Enter or Esc to dismiss"));
+    }
+
+    #[test]
     fn test_render_constrained_dimensions() {
         let backend = TestBackend::new(40, 15);
         let mut terminal = RatatuiTerminal::new(backend).unwrap();
@@ -575,5 +645,18 @@ mod tests {
             render_ui(f, &state);
         });
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_render_warning_on_tiny_terminal() {
+        let backend = TestBackend::new(12, 4);
+        let mut terminal = RatatuiTerminal::new(backend).unwrap();
+        let state = UiState {
+            device_connected: false,
+            removal_warning: true,
+            ..UiState::default()
+        };
+
+        assert!(terminal.draw(|frame| render_ui(frame, &state)).is_ok());
     }
 }

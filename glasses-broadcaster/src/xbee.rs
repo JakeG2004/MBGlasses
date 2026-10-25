@@ -14,6 +14,7 @@ pub const WIRE_LEN: usize = PACKET_LEN + 1; // 97 bytes
 
 pub struct Xbee {
     dev: FtdiDevice,
+    device_id: nusb::DeviceId,
 }
 
 impl Xbee {
@@ -57,6 +58,7 @@ impl Xbee {
     ///
     /// Returns an error if opening the FTDI device fails.
     pub async fn open(info: DeviceInfo) -> Result<Self> {
+        let device_id = info.id();
         let mut dev = FtdiDevice::from_device_info(info, Interface::Any)
             .await
             .context("unable to open ftdi device")?;
@@ -80,7 +82,7 @@ impl Xbee {
 
         let _ = dev.set_flow_control(FlowControl::Disabled).await;
 
-        Ok(Self { dev })
+        Ok(Self { dev, device_id })
     }
 
     /// Constructs the 97-byte wire frame: 96 RGB bytes + trailing 0x00 terminator.
@@ -100,6 +102,17 @@ impl Xbee {
     pub async fn send(&mut self, packet: &Packet) -> ftdi_nusb::Result<()> {
         let wire = Self::frame(packet);
         self.dev.write_all(&wire).await
+    }
+
+    /// Check whether this exact FTDI device is still connected.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if USB enumeration fails.
+    pub fn is_connected(&self) -> Result<bool> {
+        Ok(Self::enumerate()?
+            .iter()
+            .any(|device| device.id() == self.device_id))
     }
 
     /// Closes and releases the FTDI device context.
