@@ -22,12 +22,39 @@ export class Effect {
                 {this.patterns.length === 0 ? (
                     <p>No patterns added yet.</p>
                 ) : (
-                    <table>
+                    <div className="effect-patterns">
                         {this.patterns.map((pattern, index) => pattern.display(index, onUpdate))}
-                    </table>
+                    </div>
                 )}
+                <br></br>
+                <div>
+                    <span>Loop Effect: </span>
+                    <input className="loop-checkbox"
+                        type="checkbox"
+                        checked={this.isLooping}
+                        onChange={e => {
+                            this.isLooping = e.target.checked;
+                            onUpdate();
+                        }}
+                    />
+                </div>
 
-                <p>(Looping: {this.isLooping ? "Yes" : "No"})</p>
+                <div className="effect-buttons">
+                    <button
+                        onClick={e => {
+                            this.patterns.push(new Pattern());
+                            onUpdate();
+                        }}>
+                    +
+                    </button>
+                    <button
+                        onClick={e => {
+                            this.patterns.pop();
+                            onUpdate();
+                        }}>
+                    -
+                    </button>
+                </div>
             </div>
         );
     }
