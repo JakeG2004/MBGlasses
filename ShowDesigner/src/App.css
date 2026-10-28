@@ -268,3 +268,41 @@ button {
   width: 28px;
   height: 28px;
 }
+/* Row entry: pattern row on the left, controls pinned to the right */
+
+.pattern-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pattern-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.row-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85em;
+  line-height: 1;
+}
+
+.row-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.row-btn:disabled:hover {
+  border-color: transparent;
+}
+
+.row-btn-delete:hover:not(:disabled) {
+  border-color: #d62839;
+  color: #d62839;
+}
