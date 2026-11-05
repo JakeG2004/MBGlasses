@@ -17,6 +17,7 @@ use crate::xbee::Xbee;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyCmd {
     Char(char),
+    Acknowledge,
     Quit,
 }
 
@@ -24,6 +25,7 @@ pub enum KeyCmd {
 pub enum UsbReport {
     Ok,
     Err(String),
+    Removed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,7 +68,19 @@ impl Sequencer {
 
     /// Handle a key immediately, even mid-cue.
     pub fn on_key(&mut self, cmd: KeyCmd, now: Instant) -> (SeqOutcome, Option<Packet>) {
+        if self.ui.removal_warning {
+            match cmd {
+                KeyCmd::Acknowledge => {
+                    self.ui.removal_warning = false;
+                    return (SeqOutcome::Continue, None);
+                }
+                KeyCmd::Quit | KeyCmd::Char('.') => {}
+                KeyCmd::Char(_) => return (SeqOutcome::Continue, None),
+            }
+        }
+
         match cmd {
+            KeyCmd::Acknowledge => (SeqOutcome::Continue, None),
             KeyCmd::Quit => {
                 self.player.stop();
                 self.idle_ui(None);
@@ -137,6 +151,17 @@ impl Sequencer {
             UsbReport::Err(msg) => {
                 self.ui.is_error = true;
                 self.ui.status_message = Some(msg);
+            }
+            UsbReport::Removed => {
+                if self.ui.device_connected {
+                    self.player.stop();
+                    self.ui.device_connected = false;
+                    self.ui.removal_warning = true;
+                    self.ui.is_error = false;
+                    self.idle_ui(Some(
+                        "Transmitter removed - reconnect it and restart broadcasting".to_owned(),
+                    ));
+                }
             }
         }
     }
@@ -302,10 +327,12 @@ pub fn input_loop(tx: &mpsc::Sender<KeyCmd>) {
             && key_event.code == KeyCode::Char('c')
         {
             KeyCmd::Quit
-        } else if let KeyCode::Char(c) = key_event.code {
-            KeyCmd::Char(c)
         } else {
-            continue;
+            match key_event.code {
+                KeyCode::Char(c) => KeyCmd::Char(c),
+                KeyCode::Enter | KeyCode::Esc => KeyCmd::Acknowledge,
+                _ => continue,
+            }
         };
         if tx.blocking_send(cmd).is_err() {
             break;
@@ -344,16 +371,47 @@ pub async fn usb_task(
     mut packets: mpsc::Receiver<Packet>,
     reports: mpsc::Sender<UsbReport>,
 ) {
-    while let Some(packet) = packets.recv().await {
-        let report = match device.as_mut() {
-            Some(link) => match link.send(&packet).await {
-                Ok(()) => UsbReport::Ok,
-                Err(err) => UsbReport::Err(err.to_string()),
-            },
-            None => UsbReport::Ok,
-        };
-        if reports.send(report).await.is_err() {
-            break;
+    let mut presence_check = tokio::time::interval(Duration::from_millis(500));
+    presence_check.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    presence_check.tick().await;
+
+    loop {
+        tokio::select! {
+            packet = packets.recv() => {
+                let Some(packet) = packet else { break; };
+                let report = match device.as_mut() {
+                    Some(link) => match link.send(&packet).await {
+                        Ok(()) => UsbReport::Ok,
+                        Err(err) => UsbReport::Err(err.to_string()),
+                    },
+                    None => UsbReport::Ok,
+                };
+                if reports.send(report).await.is_err() {
+                    break;
+                }
+            }
+            _ = presence_check.tick(), if device.is_some() => {
+                let Some(link) = device.as_ref() else {
+                    continue;
+                };
+                let connected = link.is_connected();
+                match connected {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        if reports.send(UsbReport::Removed).await.is_err() {
+                            break;
+                        }
+                        if let Some(link) = device.take() {
+                            link.close().await;
+                        }
+                    }
+                    Err(err) => {
+                        if reports.send(UsbReport::Err(err.to_string())).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
         }
     }
     if let Some(link) = device.take() {
@@ -477,6 +535,78 @@ mod tests {
         assert_eq!(outcome, SeqOutcome::Continue);
         assert!(packet.is_none());
         assert_eq!(seq.snapshot().current_routine, "IDLE");
+    }
+
+    #[test]
+    fn removal_stops_playback_and_requires_acknowledgement() {
+        let (catalog, _) = looping_white();
+        let mut seq = Sequencer::new(catalog, true, UiState::default());
+        let now = Instant::now();
+        let _ = seq.on_key(KeyCmd::Char('w'), now);
+
+        seq.on_usb(UsbReport::Removed);
+        let state = seq.snapshot();
+        assert!(!state.device_connected);
+        assert!(state.removal_warning);
+        assert_eq!(state.current_routine, "IDLE");
+        assert!(seq.deadline().is_none());
+
+        let (outcome, packet) = seq.on_key(KeyCmd::Char('w'), now);
+        assert_eq!(outcome, SeqOutcome::Continue);
+        assert!(packet.is_none());
+        assert!(seq.snapshot().removal_warning);
+
+        let _ = seq.on_key(KeyCmd::Acknowledge, now);
+        assert!(!seq.snapshot().removal_warning);
+        assert!(!seq.snapshot().device_connected);
+    }
+
+    #[test]
+    fn duplicate_removal_does_not_reopen_acknowledged_warning() {
+        let (catalog, _) = looping_white();
+        let mut seq = Sequencer::new(catalog, true, UiState::default());
+
+        seq.on_usb(UsbReport::Removed);
+        let _ = seq.on_key(KeyCmd::Acknowledge, Instant::now());
+        seq.on_usb(UsbReport::Removed);
+
+        assert!(!seq.snapshot().removal_warning);
+        assert!(!seq.snapshot().device_connected);
+    }
+
+    #[test]
+    fn removal_warning_is_independent_of_later_status_updates() {
+        let (catalog, _) = looping_white();
+        let mut seq = Sequencer::new(catalog, true, UiState::default());
+        seq.on_usb(UsbReport::Removed);
+
+        seq.on_usb(UsbReport::Err("temporary enumeration failure".to_owned()));
+        let _ = seq.on_tick(Instant::now());
+
+        assert!(seq.snapshot().removal_warning);
+    }
+
+    #[test]
+    fn ordinary_usb_errors_do_not_trigger_removal_warning() {
+        let (catalog, _) = looping_white();
+        let mut seq = Sequencer::new(catalog, true, UiState::default());
+
+        seq.on_usb(UsbReport::Err("temporary enumeration failure".to_owned()));
+
+        assert!(seq.snapshot().device_connected);
+        assert!(!seq.snapshot().removal_warning);
+        assert!(seq.snapshot().is_error);
+    }
+
+    #[test]
+    fn removal_warning_still_allows_quit() {
+        let (catalog, _) = looping_white();
+        let mut seq = Sequencer::new(catalog, true, UiState::default());
+        seq.on_usb(UsbReport::Removed);
+
+        let (outcome, packet) = seq.on_key(KeyCmd::Char('.'), Instant::now());
+        assert_eq!(outcome, SeqOutcome::Quit);
+        assert!(packet.is_none());
     }
 
     #[tokio::test]

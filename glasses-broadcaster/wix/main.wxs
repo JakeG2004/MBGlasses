@@ -1,0 +1,87 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!--
+  Copyright (C) 2017 Christopher R. Field.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<Wix xmlns='http://wixtoolset.org/schemas/v4/wxs'
+     xmlns:ui='http://wixtoolset.org/schemas/v4/wxs/ui'>
+    <Package
+        Name='Glasses Broadcaster'
+        UpgradeCode='167CB7C3-243A-41D2-8E59-D28BEEC9F785'
+        Manufacturer='Paul Shannon; Jake Gendreau; Derek McNee; Darwin Porth'
+        Language='1033'
+        Version='$(var.Version)'
+        InstallerVersion='500'
+        Scope='perMachine'>
+        <SummaryInformation Description='Marching band light-show operator console' Keywords='Installer'/>
+
+        <MajorUpgrade
+            Schedule='afterInstallInitialize'
+            MigrateFeatures='yes'
+            DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
+
+        <MediaTemplate EmbedCab='yes'/>
+        <Property Id='WINDOWSMAJORVERSION' Secure='yes'>
+            <RegistrySearch Id='WindowsMajorVersion' Root='HKLM'
+                Key='SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+                Name='CurrentMajorVersionNumber' Type='raw' Bitness='always64'/>
+        </Property>
+        <Launch Condition='Installed OR (VersionNT64 AND WINDOWSMAJORVERSION = "#10")'
+            Message='Glasses Broadcaster requires 64-bit Windows 10 or Windows 11.'/>
+
+        <StandardDirectory Id='ProgramFiles64Folder'>
+            <Directory Id='APPLICATIONFOLDER' Name='glasses-broadcaster'>
+                <Directory Id='Bin' Name='bin'>
+                    <Directory Id='DataFolder' Name='data'/>
+                    <Component Id='Path' Guid='342BC5F4-C0AE-49C2-860B-10E43D11D739' KeyPath='yes' Bitness='always64'>
+                        <Environment Id='PATH' Name='PATH' Value='[Bin]' Permanent='no'
+                            Part='last' Action='set' System='yes'/>
+                    </Component>
+                    <Component Id='binary0' Guid='*' Bitness='always64'>
+                        <File Id='exe0' Name='glasses-broadcaster.exe'
+                            Source='$(var.CargoTargetBinDir)\glasses-broadcaster.exe' KeyPath='yes'/>
+                    </Component>
+                    <Component Id='Launcher' Guid='*' Bitness='always64'>
+                        <File Id='LaunchCommand' Name='launch.cmd' Source='$(var.LauncherPath)' KeyPath='yes'>
+                            <Shortcut Id='StartMenuShortcut' Name='Glasses Broadcaster'
+                                Directory='ProgramMenuFolder' WorkingDirectory='Bin' Advertise='yes'/>
+                        </File>
+                    </Component>
+                </Directory>
+            </Directory>
+        </StandardDirectory>
+        <StandardDirectory Id='ProgramMenuFolder'/>
+
+        <Feature Id='Binaries' Title='Application' Description='Installs the application and bundled shows.'
+            Level='1' ConfigurableDirectory='APPLICATIONFOLDER' AllowAdvertise='no'
+            Display='expand' AllowAbsent='no'>
+            <ComponentRef Id='binary0'/>
+            <ComponentRef Id='Launcher'/>
+            <Files Directory='DataFolder' Include='$(var.DataDir)\**'/>
+            <Feature Id='Environment' Title='PATH Environment Variable'
+                Description='Allow the application to be run from any terminal.' Level='1' AllowAbsent='yes'>
+                <ComponentRef Id='Path'/>
+            </Feature>
+        </Feature>
+
+        <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
+        <Property Id='ARPHELPLINK' Value='https://github.com/JakeG2004/MBGlasses'/>
+        <ui:WixUI Id='WixUI_FeatureTree'/>
+        <UI>
+            <Publish Dialog='WelcomeDlg' Control='Next' Event='NewDialog' Value='CustomizeDlg' Order='99' Condition='1'/>
+            <Publish Dialog='CustomizeDlg' Control='Back' Event='NewDialog' Value='WelcomeDlg' Order='99' Condition='1'/>
+        </UI>
+    </Package>
+</Wix>
