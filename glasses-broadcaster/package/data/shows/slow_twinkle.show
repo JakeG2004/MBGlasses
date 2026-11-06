@@ -1,0 +1,13 @@
+Show(
+    key: 'z',
+    name: "Slow Twinkle",
+    category: "Twinkles & Sparkles",
+    desc: "Slow holiday shimmer",
+    looping: true,
+    program: [
+        Hold(frame: "x1", wait: "dash"),
+        Hold(frame: "x2", wait: "dash"),
+        Hold(frame: "x3", wait: "dash"),
+        Hold(frame: "x4", wait: "dash"),
+    ],
+)

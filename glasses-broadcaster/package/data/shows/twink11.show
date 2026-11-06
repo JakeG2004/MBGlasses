@@ -1,0 +1,10 @@
+Show(
+    key: 'l',
+    name: "Twink 11",
+    category: "Twinkles & Sparkles",
+    desc: "Twinkle step 11 pulse",
+    looping: false,
+    program: [
+        Hold(frame: "twnk11", wait: "dab"),
+    ],
+)

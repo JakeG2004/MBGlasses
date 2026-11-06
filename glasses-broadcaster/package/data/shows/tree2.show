@@ -1,0 +1,16 @@
+Show(
+    key: '4',
+    name: "Tree 2",
+    category: "Holiday & Specials",
+    desc: "White/Red/Gold tree loop",
+    looping: true,
+    program: [
+        LoadWorking(frame: "tree2"),
+        HoldWorking(wait: "slp"),
+        Rotate13,
+        Hold(frame: "dark", wait: "slp"),
+        HoldWorking(wait: "slp"),
+        Rotate13,
+        Hold(frame: "dark", wait: "slp"),
+    ],
+)

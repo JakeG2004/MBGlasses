@@ -328,7 +328,23 @@ mod tests {
             .expect("dark");
         assert_eq!(second.packet, DARK);
 
-        assert!(player.advance(&catalog, second.deadline).unwrap().is_none());
+        let tail_first = player
+            .advance(&catalog, second.deadline)
+            .unwrap()
+            .expect("tail starts");
+        assert_eq!(tail_first.packet, DARK);
+        assert!(!player.is_running());
+        assert_eq!(player.show_name(), "IDLE");
+
+        let mut at = tail_first.deadline;
+        let mut count = 1;
+        while let Some(step) = player.advance(&catalog, at).unwrap() {
+            assert_eq!(step.packet, DARK);
+            count += 1;
+            at = step.deadline;
+        }
+        assert_eq!(count, usize::from(DARK_TAIL_COUNT));
+        assert!(player.deadline().is_none());
         assert!(!player.is_running());
         assert_eq!(player.show_name(), "IDLE");
     }

@@ -1,0 +1,13 @@
+Show(
+    key: 's',
+    name: "Rainbow Short",
+    category: "Animations & Marquees",
+    desc: "4-color rainbow pass",
+    looping: false,
+    program: [
+        Hold(frame: "rain1", wait: "dash"),
+        Hold(frame: "rain2", wait: "dash"),
+        Hold(frame: "rain3", wait: "dash"),
+        Hold(frame: "rain4", wait: "dash"),
+    ],
+)
