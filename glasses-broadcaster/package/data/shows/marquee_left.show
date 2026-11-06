@@ -1,0 +1,12 @@
+Show(
+    key: '[',
+    name: "Marquee Left",
+    category: "Animations & Marquees",
+    desc: "Scrolling left loop",
+    looping: true,
+    program: [
+        LoadWorking(frame: "ig"),
+        MarqueeLeft,
+        HoldWorking(wait: "dab"),
+    ],
+)

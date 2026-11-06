@@ -1,0 +1,10 @@
+Show(
+    key: 'd',
+    name: "Dark",
+    category: "Flashes & Solids",
+    desc: "All channels off",
+    looping: false,
+    program: [
+        Hold(frame: "dark", wait: "dab"),
+    ],
+)

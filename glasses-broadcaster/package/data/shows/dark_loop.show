@@ -1,0 +1,10 @@
+Show(
+    key: '0',
+    name: "Dark Loop",
+    category: "Flashes & Solids",
+    desc: "Continuous dark hold",
+    looping: true,
+    program: [
+        Hold(frame: "dark", wait: "dork"),
+    ],
+)

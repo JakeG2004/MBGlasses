@@ -1,0 +1,10 @@
+Show(
+    key: 'n',
+    name: "Gold Loop",
+    category: "Flashes & Solids",
+    desc: "Continuous gold hold",
+    looping: true,
+    program: [
+        Hold(frame: "gold", wait: "dork"),
+    ],
+)

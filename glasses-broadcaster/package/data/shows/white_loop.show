@@ -1,0 +1,10 @@
+Show(
+    key: 'o',
+    name: "White Loop",
+    category: "Flashes & Solids",
+    desc: "Continuous white hold",
+    looping: true,
+    program: [
+        Hold(frame: "white", wait: "dot"),
+    ],
+)

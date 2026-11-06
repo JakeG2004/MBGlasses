@@ -1,0 +1,10 @@
+Show(
+    key: 'e',
+    name: "Green Flash",
+    category: "Flashes & Solids",
+    desc: "Solid green pulse",
+    looping: false,
+    program: [
+        Hold(frame: "green", wait: "dab"),
+    ],
+)
