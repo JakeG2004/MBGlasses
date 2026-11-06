@@ -76,7 +76,7 @@ jobs:
           TARGET_ID: ${{ matrix.id }}
           VERSION: ${{ needs.preflight.outputs.version }}
         run: python3 packaging/release/release.py build-linux --target "$TARGET_ID" --version "$VERSION" --output target/release-packages
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-${{ matrix.id }}
           path: |
@@ -133,7 +133,7 @@ jobs:
           label=unsigned
           if [ "$MACOS_SIGN" = 1 ]; then label=signed; fi
           python3 packaging/release/release.py attest --target "$MACOS_ID" --version "$VERSION" --package "target/release-packages/glasses-broadcaster-$VERSION-$MACOS_ID-$label.pkg" --proof target/release-packages/macos-verification.json --output target/release-artifact --macos-sign "$MACOS_SIGN"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-${{ fromJSON(needs.preflight.outputs.macos).id }}
           path: |
@@ -189,7 +189,7 @@ jobs:
         run: ./packaging/windows/build.ps1 -Stage Verify -Version $env:VERSION -OutputDirectory $env:OUT -PreviousMsi $env:PREVIOUS_MSI
       - name: Record verified final MSI
         run: python packaging/release/release.py attest --target $env:WINDOWS_ID --version $env:VERSION --package "$env:OUT/msi/glasses-broadcaster-$env:VERSION-$env:WINDOWS_ID.msi" --proof "$env:OUT/windows-verification.json" --output target/release-artifact
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-${{ fromJSON(needs.preflight.outputs.windows).id }}
           path: |
