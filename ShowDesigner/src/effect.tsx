@@ -59,7 +59,7 @@ export class Effect {
                         this.deletePattern(index);
                         onUpdate();
                     }}>
-                    ✕
+                    -
                 </button>
             </div>
         );
