@@ -4,8 +4,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::catalog::{Catalog, Op, Show, Wait};
 use crate::patterns::{DARK, Packet, marquee_left, marquee_right, rotate13};
-use std::time::{Duration};
-
+use std::time::Duration;
 
 /// Full brightness is a no-op multiply on emit.
 pub const BRIGHTNESS_MAX: u8 = 255;
@@ -155,7 +154,10 @@ impl Player {
         self.tail_remaining = self.tail_remaining.saturating_sub(1);
         let deadline = now + DARK_TAIL_INTERVAL;
         self.deadline = (self.tail_remaining > 0).then_some(deadline);
-        Step { packet: DARK, deadline }
+        Step {
+            packet: DARK,
+            deadline,
+        }
     }
 
     fn execute_until_wait(&mut self, catalog: &Catalog, now: Instant) -> Result<Option<Step>> {
