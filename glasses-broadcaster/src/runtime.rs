@@ -94,9 +94,13 @@ impl Sequencer {
             }
             KeyCmd::Char(',') => {
                 self.ui.last_key = Some(',');
-                self.player.stop();
+                let step = self.player.stop_with_tail(now);
                 self.idle_ui(Some("Stopped".to_owned()));
-                (SeqOutcome::Continue, Some(self.note_packet(DARK)))
+                //(SeqOutcome::Continue, Some(self.note_packet(DARK)))
+                (
+                    SeqOutcome::Continue,
+                    step.map(|s| self.note_packet(s.packet)),
+                )
             }
             KeyCmd::Char('<') => {
                 self.ui.last_key = Some('<');
@@ -327,6 +331,8 @@ pub fn input_loop(tx: &mpsc::Sender<KeyCmd>) {
             && key_event.code == KeyCode::Char('c')
         {
             KeyCmd::Quit
+        } else if let KeyCode::Char(c) = key_event.code {
+            KeyCmd::Char(c)
         } else {
             match key_event.code {
                 KeyCode::Char(c) => KeyCmd::Char(c),
@@ -378,16 +384,30 @@ pub async fn usb_task(
     loop {
         tokio::select! {
             packet = packets.recv() => {
-                let Some(packet) = packet else { break; };
-                let report = match device.as_mut() {
-                    Some(link) => match link.send(&packet).await {
-                        Ok(()) => UsbReport::Ok,
-                        Err(err) => UsbReport::Err(err.to_string()),
-                    },
-                    None => UsbReport::Ok,
-                };
-                if reports.send(report).await.is_err() {
-                    break;
+                let Some(first) = packet else { break; };
+                let mut pending = std::collections::VecDeque::from([first]);
+                // Re-drain before every send so a newly queued show packet
+                // jumps ahead of any dark-tail packets still waiting.
+                while !pending.is_empty() {
+                    while let Ok(next) = packets.try_recv() {
+                        pending.push_back(next);
+                    }
+                    if pending.iter().any(|p| *p != DARK) {
+                        while pending.front() == Some(&DARK) {
+                            pending.pop_front();
+                        }
+                    }
+                let Some(packet) = pending.pop_front() else { break; };
+                    let report = match device.as_mut() {
+                        Some(link) => match link.send(&packet).await {
+                            Ok(()) => UsbReport::Ok,
+                            Err(err) => UsbReport::Err(err.to_string()),
+                        },
+                        None => UsbReport::Ok,
+                    };
+                    if reports.send(report).await.is_err() {
+                        return;
+                    }
                 }
             }
             _ = presence_check.tick(), if device.is_some() => {
@@ -411,6 +431,13 @@ pub async fn usb_task(
                         }
                     }
                 }
+            }
+        }
+    }
+    if let Some(link) = device.as_mut() {
+        for _ in 0..crate::engine::DARK_TAIL_COUNT {
+            if link.send(&DARK).await.is_err() {
+                break;
             }
         }
     }
@@ -512,6 +539,15 @@ mod tests {
         let snap = seq.snapshot();
         assert_eq!(snap.current_routine, "IDLE");
         assert_eq!(snap.loop_status, LoopStatus::Idle);
+        assert!(seq.deadline().is_some());
+        let mut at = seq.deadline().unwrap();
+        let mut count = 1;
+        while let Some(p) = seq.on_tick(at) {
+            assert_eq!(p, DARK);
+            count += 1;
+            at = seq.deadline().unwrap_or(at);
+        }
+        assert_eq!(count, crate::engine::DARK_TAIL_COUNT);
         assert!(seq.deadline().is_none());
     }
 
