@@ -237,9 +237,7 @@ impl Sequencer {
     }
 
     fn should_broadcast_idle_dark(&self) -> bool {
-        !self.ui.polite_mode
-            && !self.player.is_running()
-            && self.player.deadline().is_none()
+        !self.ui.polite_mode && !self.player.is_running() && self.player.deadline().is_none()
     }
 
     fn idle_dark_packet(&mut self) -> Option<Packet> {
@@ -494,12 +492,9 @@ pub async fn sequencer_task(
 ) {
     let _ = ui.send(sequencer.snapshot());
 
-    let mut idle_broadcast =
-        tokio::time::interval(crate::engine::DARK_TAIL_INTERVAL);
+    let mut idle_broadcast = tokio::time::interval(crate::engine::DARK_TAIL_INTERVAL);
 
-    idle_broadcast.set_missed_tick_behavior(
-        tokio::time::MissedTickBehavior::Skip
-    );
+    idle_broadcast.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     idle_broadcast.tick().await;
 
     loop {

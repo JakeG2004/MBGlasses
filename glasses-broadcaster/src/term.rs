@@ -466,10 +466,20 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &UiState) {
         Span::styled(
             " [!] ",
             Style::default()
-                .fg(if state.polite_mode { Color::Green } else { Color::Red })
+                .fg(if state.polite_mode {
+                    Color::Green
+                } else {
+                    Color::Red
+                })
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(format!("Polite Mode: {}", if state.polite_mode { "ON " } else { "OFF" }), Style::default().fg(Color::White)),
+        Span::styled(
+            format!(
+                "Polite Mode: {}",
+                if state.polite_mode { "ON " } else { "OFF" }
+            ),
+            Style::default().fg(Color::White),
+        ),
         Span::raw("   "),
         Span::styled(
             " [,] ",
