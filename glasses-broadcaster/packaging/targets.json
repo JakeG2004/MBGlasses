@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "expected_packages": 22,
+  "lifecycle_reviewed": "2026-10-23",
+  "tools": {
+    "rust": "1.99.1",
+    "rustup": "1.28.2",
+    "rustup_sha256": {
+      "x86_64": "20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c",
+      "arm64": "e3853c5a252fca15252d07cb23a1bdd9377a8c6f3efa01531109281ae47f841c"
+    },
+    "cargo_deb": "3.8.0",
+    "wix": "7.0.0",
+    "dotnet": "10.0.402",
+    "python": "3.14.9"
+  },
+  "linux_architectures": {
+    "x86_64": {
+      "runner": "ubuntu-24.04",
+      "platform": "linux/amd64",
+      "rust_target": "x86_64-unknown-linux-gnu",
+      "deb_arch": "amd64",
+      "rpm_arch": "x86_64",
+      "processor": "Intel / AMD 64-bit"
+    },
+    "arm64": {
+      "runner": "ubuntu-24.04-arm",
+      "platform": "linux/arm64",
+      "rust_target": "aarch64-unknown-linux-gnu",
+      "deb_arch": "arm64",
+      "rpm_arch": "aarch64",
+      "processor": "ARM64"
+    }
+  },
+  "linux": [
+    {
+      "id": "debian-12", "distribution": "Debian", "version": "12 LTS", "format": "deb", "repository": "debian",
+      "images": {
+        "x86_64": "sha256:f9c4778ec75d6b054367315b1eb4f3992ee5866b50de6d591a33e8904cba3f17",
+        "arm64": "sha256:441888b788d52d35c32f28c10abb5c748f3427c7836f61612700d30afb4572cb"
+      }
+    },
+    {
+      "id": "debian-13", "distribution": "Debian", "version": "13", "format": "deb", "repository": "debian",
+      "images": {
+        "x86_64": "sha256:15a71cc87173e191d5046f9c4288db4e8954b67f92e48d9587087826b0afe562",
+        "arm64": "sha256:0daf3052d9359adaa0de63035b87949cc6c7966bfd6d60746d318ee1999f5edb"
+      }
+    },
+    {
+      "id": "ubuntu-22.04", "distribution": "Ubuntu", "version": "22.04 LTS", "format": "deb", "repository": "ubuntu",
+      "images": {
+        "x86_64": "sha256:98510ac07bb4545e389be502a8918b385c018bfe4ceeb5ac7e0375c782268b04",
+        "arm64": "sha256:88881eb36da489f9ff8746ece8048ca16cc94f80e8cd3ae7e8335d8822631591"
+      }
+    },
+    {
+      "id": "ubuntu-24.04", "distribution": "Ubuntu", "version": "24.04 LTS", "format": "deb", "repository": "ubuntu",
+      "images": {
+        "x86_64": "sha256:a2d43bffc46670d7108bb3c0468c67c5557c4c92e83e1e34cbff1322ad1b94dc",
+        "arm64": "sha256:18b33ff3829707f31ada654a963b9ee35f2e6f0241b964bd17a22a9b330cb63d"
+      }
+    },
+    {
+      "id": "ubuntu-26.04", "distribution": "Ubuntu", "version": "26.04 LTS", "format": "deb", "repository": "ubuntu",
+      "images": {
+        "x86_64": "sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a",
+        "arm64": "sha256:7f787d965bc0e4cd42b5f74c013515d6e24ce691c881c81c42e4db59a791e5ce"
+      }
+    },
+    {
+      "id": "fedora-43", "distribution": "Fedora", "version": "43", "format": "rpm", "dist": ".fc43", "repository": "fedora",
+      "images": {
+        "x86_64": "sha256:1ad64e0ebefee83263fffacc5cb139b37ff70def215e4fe44720896c83353132",
+        "arm64": "sha256:8de9a064b0d0371271a1ba30980563cb92af15e3be2a94b56d2b19fa215a4a45"
+      }
+    },
+    {
+      "id": "fedora-44", "distribution": "Fedora", "version": "44", "format": "rpm", "dist": ".fc44", "repository": "fedora",
+      "images": {
+        "x86_64": "sha256:be9d65e2344d805cc11114319c685ecaa96b6d9b4350a0a6460cdb931babbd19",
+        "arm64": "sha256:e402cca673711fee025f9ce21c6c08b1bd25ee26b3c482119c8675fbaaedbc85"
+      }
+    },
+    {
+      "id": "rhel-8.10", "distribution": "Red Hat Enterprise Linux", "version": "8.10", "format": "rpm", "dist": ".el8", "repository": "registry.access.redhat.com/ubi8/ubi",
+      "images": {
+        "x86_64": "sha256:04f1f054df24a55ea46e84b9a9dd83f4bb7e3bdbb0276d07d7b735803933d3bd",
+        "arm64": "sha256:4b43e5bed0b8fe586b0568c0bb719570bbbc58a01c1da204d83c54b77c10eb8b"
+      }
+    },
+    {
+      "id": "rhel-9.8", "distribution": "Red Hat Enterprise Linux", "version": "9.8", "format": "rpm", "dist": ".el9", "repository": "registry.access.redhat.com/ubi9/ubi",
+      "images": {
+        "x86_64": "sha256:3bd1aa8b49948633375021c22ef5601ae644f5c08c869751ac2b542884622ea1",
+        "arm64": "sha256:3aae33df828c9f34994ff44a0fb3b5dc1db272bef7d13103158044bb03439896"
+      }
+    },
+    {
+      "id": "rhel-10.2", "distribution": "Red Hat Enterprise Linux", "version": "10.2", "format": "rpm", "dist": ".el10", "repository": "registry.access.redhat.com/ubi10/ubi",
+      "images": {
+        "x86_64": "sha256:323150de5f418e7abd37551c3d979bc59c26efca67e347d136f34540bfc1c2da",
+        "arm64": "sha256:3b28a3a333b2a4677f197e9499b574423404e0e6c2b1020f016759128faebf12"
+      }
+    }
+  ],
+  "macos": {
+    "id": "macos-11.0-arm64", "os": "macos", "distribution": "macOS", "version": "11 or newer",
+    "minimum_os": "11.0", "architecture": "arm64", "processor": "Apple Silicon",
+    "runner": "macos-15", "rust_target": "aarch64-apple-darwin", "format": "pkg"
+  },
+  "windows": {
+    "id": "windows-10-11-x86_64", "os": "windows", "distribution": "Windows", "version": "10 / 11",
+    "architecture": "x86_64", "processor": "Intel / AMD 64-bit",
+    "runner": "windows-2025", "rust_target": "x86_64-pc-windows-msvc", "format": "msi"
+  }
+}
