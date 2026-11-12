@@ -19,6 +19,7 @@ pub const DARK_TAIL_INTERVAL: Duration = Duration::from_millis(18);
 pub struct Step {
     pub packet: Packet,
     pub deadline: Instant,
+    pub tail: bool,
 }
 
 /// Interprets a show program without talking to USB or the TUI.
@@ -157,6 +158,7 @@ impl Player {
         Step {
             packet: DARK,
             deadline,
+            tail: true,
         }
     }
 
@@ -242,7 +244,11 @@ impl Player {
     fn hold(&mut self, packet: Packet, wait: &Wait, now: Instant) -> Result<Step> {
         let deadline = now + wait.duration()?;
         self.deadline = Some(deadline);
-        Ok(Step { packet, deadline })
+        Ok(Step {
+            packet,
+            deadline,
+            tail: false,
+        })
     }
 }
 

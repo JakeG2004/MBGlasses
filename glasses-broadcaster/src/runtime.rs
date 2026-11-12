@@ -21,6 +21,12 @@ pub enum KeyCmd {
     Quit,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Outgoing {
+    pub packet: Packet,
+    pub tail: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UsbReport {
     Ok,
@@ -39,6 +45,7 @@ pub struct Sequencer {
     catalog: Catalog,
     player: Player,
     ui: UiState,
+    last_tail: bool,
 }
 
 impl Sequencer {
@@ -53,7 +60,13 @@ impl Sequencer {
             catalog,
             player: Player::new(),
             ui,
+            last_tail: false,
         }
+    }
+
+    #[must_use]
+    pub fn last_was_tail(&self) -> bool {
+        self.last_tail
     }
 
     #[must_use]
@@ -95,12 +108,17 @@ impl Sequencer {
             KeyCmd::Char(',') => {
                 self.ui.last_key = Some(',');
                 let step = self.player.stop_with_tail(now);
+                self.last_tail = step.as_ref().is_some_and(|s| s.tail);
                 self.idle_ui(Some("Stopped".to_owned()));
-                //(SeqOutcome::Continue, Some(self.note_packet(DARK)))
                 (
                     SeqOutcome::Continue,
                     step.map(|s| self.note_packet(s.packet)),
                 )
+            }
+            KeyCmd::Char('!') => {
+                self.ui.last_key = Some('!');
+                self.ui.polite_mode = !self.ui.polite_mode;
+                (SeqOutcome::Continue, None)
             }
             KeyCmd::Char('<') => {
                 self.ui.last_key = Some('<');
@@ -127,6 +145,7 @@ impl Sequencer {
     pub fn on_tick(&mut self, now: Instant) -> Option<Packet> {
         match self.player.advance(&self.catalog, now) {
             Ok(Some(step)) => {
+                self.last_tail = step.tail;
                 self.sync_routine_ui();
                 Some(self.note_packet(step.packet))
             }
@@ -174,8 +193,10 @@ impl Sequencer {
         let Some(show) = self.catalog.show_for_key(key).cloned() else {
             return (SeqOutcome::Continue, None);
         };
+        self.last_tail = false;
         match self.player.start(&show, &self.catalog, now) {
             Ok(Some(step)) => {
+                self.last_tail = step.tail;
                 self.sync_routine_ui();
                 self.ui.status_message = Some(format!("Playing {}", show.name));
                 self.ui.is_error = false;
@@ -213,6 +234,20 @@ impl Sequencer {
         self.ui.last_packet = packet;
         self.ui.packet_count = self.ui.packet_count.saturating_add(1);
         packet
+    }
+
+    fn should_broadcast_idle_dark(&self) -> bool {
+        !self.ui.polite_mode
+            && !self.player.is_running()
+            && self.player.deadline().is_none()
+    }
+
+    fn idle_dark_packet(&mut self) -> Option<Packet> {
+        if self.should_broadcast_idle_dark() {
+            Some(self.note_packet(DARK))
+        } else {
+            None
+        }
     }
 }
 
@@ -374,7 +409,7 @@ pub async fn tui_task(
 /// Only writer to the broadcast link. `None` is the `--dry-run` sink.
 pub async fn usb_task(
     mut device: Option<BroadcastLink>,
-    mut packets: mpsc::Receiver<Packet>,
+    mut packets: mpsc::Receiver<Outgoing>,
     reports: mpsc::Sender<UsbReport>,
 ) {
     let mut presence_check = tokio::time::interval(Duration::from_millis(500));
@@ -392,12 +427,14 @@ pub async fn usb_task(
                     while let Ok(next) = packets.try_recv() {
                         pending.push_back(next);
                     }
-                    if pending.iter().any(|p| *p != DARK) {
-                        while pending.front() == Some(&DARK) {
+                    if pending.iter().any(|o| !o.tail) {
+                        while pending.front().is_some_and(|o| o.tail) {
                             pending.pop_front();
                         }
                     }
-                let Some(packet) = pending.pop_front() else { break; };
+                    let Some(Outgoing { packet, .. }) = pending.pop_front() else {
+                        break;
+                    };
                     let report = match device.as_mut() {
                         Some(link) => match link.send(&packet).await {
                             Ok(()) => UsbReport::Ok,
@@ -406,7 +443,7 @@ pub async fn usb_task(
                         None => UsbReport::Ok,
                     };
                     if reports.send(report).await.is_err() {
-                        return;
+                        break;
                     }
                 }
             }
@@ -450,12 +487,21 @@ pub async fn usb_task(
 pub async fn sequencer_task(
     mut sequencer: Sequencer,
     mut keys: mpsc::Receiver<KeyCmd>,
-    packets: mpsc::Sender<Packet>,
+    packets: mpsc::Sender<Outgoing>,
     mut usb_reports: mpsc::Receiver<UsbReport>,
     ui: watch::Sender<UiState>,
     shutdown: watch::Sender<bool>,
 ) {
     let _ = ui.send(sequencer.snapshot());
+
+    let mut idle_broadcast =
+        tokio::time::interval(crate::engine::DARK_TAIL_INTERVAL);
+
+    idle_broadcast.set_missed_tick_behavior(
+        tokio::time::MissedTickBehavior::Skip
+    );
+    idle_broadcast.tick().await;
+
     loop {
         let wait = sequencer
             .deadline()
@@ -465,29 +511,40 @@ pub async fn sequencer_task(
             cmd = keys.recv() => {
                 let Some(cmd) = cmd else { break; };
                 let (outcome, packet) = sequencer.on_key(cmd, Instant::now());
-                send_packet(&packets, packet);
+                send_packet(&packets, packet, sequencer.last_was_tail());
                 let _ = ui.send(sequencer.snapshot());
+
                 if outcome == SeqOutcome::Quit {
                     let _ = shutdown.send(true);
                     break;
                 }
             }
+
             Some(report) = usb_reports.recv() => {
                 sequencer.on_usb(report);
                 let _ = ui.send(sequencer.snapshot());
             }
+
             () = sleep_optional(wait) => {
                 let packet = sequencer.on_tick(Instant::now());
-                send_packet(&packets, packet);
+                send_packet(&packets, packet, sequencer.last_was_tail());
+                let _ = ui.send(sequencer.snapshot());
+            }
+
+            _ = idle_broadcast.tick(),
+                if sequencer.should_broadcast_idle_dark() =>
+            {
+                let packet = sequencer.idle_dark_packet();
+                send_packet(&packets, packet, false);
                 let _ = ui.send(sequencer.snapshot());
             }
         }
     }
 }
 
-fn send_packet(tx: &mpsc::Sender<Packet>, packet: Option<Packet>) {
+fn send_packet(tx: &mpsc::Sender<Outgoing>, packet: Option<Packet>, tail: bool) {
     if let Some(packet) = packet {
-        let _ = tx.try_send(packet);
+        let _ = tx.try_send(Outgoing { packet, tail });
     }
 }
 
@@ -650,7 +707,13 @@ mod tests {
         let (pkt_tx, pkt_rx) = mpsc::channel(4);
         let (rep_tx, mut rep_rx) = mpsc::channel(4);
         let usb = tokio::spawn(usb_task(None, pkt_rx, rep_tx));
-        pkt_tx.send(WHITE).await.expect("send");
+        pkt_tx
+            .send(Outgoing {
+                packet: WHITE,
+                tail: false,
+            })
+            .await
+            .expect("send");
         let report = rep_rx.recv().await.expect("report");
         assert_eq!(report, UsbReport::Ok);
         drop(pkt_tx);

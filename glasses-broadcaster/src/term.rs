@@ -101,6 +101,7 @@ pub struct UiState {
     pub is_error: bool,
     pub device_connected: bool,
     pub removal_warning: bool,
+    pub polite_mode: bool,
     pub port_label: String,
 }
 
@@ -117,6 +118,7 @@ impl Default for UiState {
             is_error: false,
             device_connected: true,
             removal_warning: false,
+            polite_mode: false,
             port_label: "FTDI 57600 8N1".to_string(),
         }
     }
@@ -190,7 +192,7 @@ pub fn render_ui(frame: &mut Frame, state: &UiState) {
     render_header(frame, main_chunks[0], state);
     render_command_grid(frame, main_chunks[1], state);
     render_status_and_preview(frame, main_chunks[2], state);
-    render_footer(frame, main_chunks[3]);
+    render_footer(frame, main_chunks[3], state);
     if state.removal_warning {
         render_removal_warning(frame, size);
     }
@@ -459,8 +461,16 @@ fn render_status_and_preview(frame: &mut Frame, area: Rect, state: &UiState) {
     frame.render_widget(para, inner_area);
 }
 
-fn render_footer(frame: &mut Frame, area: Rect) {
+fn render_footer(frame: &mut Frame, area: Rect, state: &UiState) {
     let keybar = Line::from(vec![
+        Span::styled(
+            " [!] ",
+            Style::default()
+                .fg(if state.polite_mode { Color::Green } else { Color::Red })
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(format!("Polite Mode: {}", if state.polite_mode { "ON " } else { "OFF" }), Style::default().fg(Color::White)),
+        Span::raw("   "),
         Span::styled(
             " [,] ",
             Style::default()
