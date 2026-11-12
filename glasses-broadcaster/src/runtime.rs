@@ -11,7 +11,7 @@ use crate::engine::Player;
 use crate::esp32h2::Esp32H2;
 use crate::link::{BroadcastLink, DeviceKind, LinkChoice, resolve};
 use crate::patterns::{DARK, Packet};
-use crate::term::{LoopStatus, Terminal, UiState, get_categories};
+use crate::term::{DeviceStatus, LoopStatus, Terminal, UiState, get_categories};
 use crate::xbee::Xbee;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,7 +51,11 @@ pub struct Sequencer {
 impl Sequencer {
     #[must_use]
     pub fn new(catalog: Catalog, device_connected: bool, mut ui: UiState) -> Self {
-        ui.device_connected = device_connected;
+        ui.device_status = if device_connected {
+            DeviceStatus::Connected
+        } else {
+            DeviceStatus::Disconnected
+        };
         ui.categories = get_categories(&catalog);
         if catalog.is_empty() {
             ui.status_message = Some("No shows loaded — idle".to_owned());
@@ -81,10 +85,10 @@ impl Sequencer {
 
     /// Handle a key immediately, even mid-cue.
     pub fn on_key(&mut self, cmd: KeyCmd, now: Instant) -> (SeqOutcome, Option<Packet>) {
-        if self.ui.removal_warning {
+        if self.ui.device_status == DeviceStatus::RemovalWarning {
             match cmd {
                 KeyCmd::Acknowledge => {
-                    self.ui.removal_warning = false;
+                    self.ui.device_status = DeviceStatus::Disconnected;
                     return (SeqOutcome::Continue, None);
                 }
                 KeyCmd::Quit | KeyCmd::Char('.') => {}
@@ -176,10 +180,9 @@ impl Sequencer {
                 self.ui.status_message = Some(msg);
             }
             UsbReport::Removed => {
-                if self.ui.device_connected {
+                if self.ui.device_status == DeviceStatus::Connected {
                     self.player.stop();
-                    self.ui.device_connected = false;
-                    self.ui.removal_warning = true;
+                    self.ui.device_status = DeviceStatus::RemovalWarning;
                     self.ui.is_error = false;
                     self.idle_ui(Some(
                         "Transmitter removed - reconnect it and restart broadcasting".to_owned(),
@@ -580,6 +583,7 @@ mod tests {
         let (catalog, _) = looping_white();
         let mut seq = Sequencer::new(catalog, true, UiState::default());
         let t0 = Instant::now();
+
         let (outcome, packet) = seq.on_key(KeyCmd::Char('w'), t0);
         assert_eq!(outcome, SeqOutcome::Continue);
         assert_eq!(packet, Some(WHITE));
@@ -588,17 +592,21 @@ mod tests {
         let (outcome, packet) = seq.on_key(KeyCmd::Char(','), t0);
         assert_eq!(outcome, SeqOutcome::Continue);
         assert_eq!(packet, Some(DARK));
+
         let snap = seq.snapshot();
         assert_eq!(snap.current_routine, "IDLE");
         assert_eq!(snap.loop_status, LoopStatus::Idle);
         assert!(seq.deadline().is_some());
+
         let mut at = seq.deadline().unwrap();
         let mut count = 1;
+
         while let Some(p) = seq.on_tick(at) {
             assert_eq!(p, DARK);
             count += 1;
             at = seq.deadline().unwrap_or(at);
         }
+
         assert_eq!(count, crate::engine::DARK_TAIL_COUNT);
         assert!(seq.deadline().is_none());
     }
@@ -608,8 +616,10 @@ mod tests {
         let (catalog, _) = looping_white();
         let mut seq = Sequencer::new(catalog, true, UiState::default());
         let t0 = Instant::now();
+
         let _ = seq.on_key(KeyCmd::Char('w'), t0);
         let (outcome, packet) = seq.on_key(KeyCmd::Char('.'), t0);
+
         assert_eq!(outcome, SeqOutcome::Quit);
         assert!(packet.is_none());
         assert_eq!(seq.snapshot().current_routine, "IDLE");
@@ -619,7 +629,9 @@ mod tests {
     fn unknown_key_is_ignored() {
         let (catalog, _) = looping_white();
         let mut seq = Sequencer::new(catalog, false, UiState::default());
+
         let (outcome, packet) = seq.on_key(KeyCmd::Char('z'), Instant::now());
+
         assert_eq!(outcome, SeqOutcome::Continue);
         assert!(packet.is_none());
         assert_eq!(seq.snapshot().current_routine, "IDLE");
@@ -630,23 +642,24 @@ mod tests {
         let (catalog, _) = looping_white();
         let mut seq = Sequencer::new(catalog, true, UiState::default());
         let now = Instant::now();
+
         let _ = seq.on_key(KeyCmd::Char('w'), now);
 
         seq.on_usb(UsbReport::Removed);
+
         let state = seq.snapshot();
-        assert!(!state.device_connected);
-        assert!(state.removal_warning);
+        assert_eq!(state.device_status, DeviceStatus::RemovalWarning);
         assert_eq!(state.current_routine, "IDLE");
         assert!(seq.deadline().is_none());
 
         let (outcome, packet) = seq.on_key(KeyCmd::Char('w'), now);
         assert_eq!(outcome, SeqOutcome::Continue);
         assert!(packet.is_none());
-        assert!(seq.snapshot().removal_warning);
+        assert_eq!(seq.snapshot().device_status, DeviceStatus::RemovalWarning);
 
         let _ = seq.on_key(KeyCmd::Acknowledge, now);
-        assert!(!seq.snapshot().removal_warning);
-        assert!(!seq.snapshot().device_connected);
+
+        assert_eq!(seq.snapshot().device_status, DeviceStatus::Disconnected);
     }
 
     #[test]
@@ -658,20 +671,20 @@ mod tests {
         let _ = seq.on_key(KeyCmd::Acknowledge, Instant::now());
         seq.on_usb(UsbReport::Removed);
 
-        assert!(!seq.snapshot().removal_warning);
-        assert!(!seq.snapshot().device_connected);
+        assert_eq!(seq.snapshot().device_status, DeviceStatus::Disconnected);
     }
 
     #[test]
     fn removal_warning_is_independent_of_later_status_updates() {
         let (catalog, _) = looping_white();
         let mut seq = Sequencer::new(catalog, true, UiState::default());
+
         seq.on_usb(UsbReport::Removed);
 
         seq.on_usb(UsbReport::Err("temporary enumeration failure".to_owned()));
         let _ = seq.on_tick(Instant::now());
 
-        assert!(seq.snapshot().removal_warning);
+        assert_eq!(seq.snapshot().device_status, DeviceStatus::RemovalWarning);
     }
 
     #[test]
@@ -681,8 +694,7 @@ mod tests {
 
         seq.on_usb(UsbReport::Err("temporary enumeration failure".to_owned()));
 
-        assert!(seq.snapshot().device_connected);
-        assert!(!seq.snapshot().removal_warning);
+        assert_eq!(seq.snapshot().device_status, DeviceStatus::Connected);
         assert!(seq.snapshot().is_error);
     }
 
@@ -690,9 +702,11 @@ mod tests {
     fn removal_warning_still_allows_quit() {
         let (catalog, _) = looping_white();
         let mut seq = Sequencer::new(catalog, true, UiState::default());
+
         seq.on_usb(UsbReport::Removed);
 
         let (outcome, packet) = seq.on_key(KeyCmd::Char('.'), Instant::now());
+
         assert_eq!(outcome, SeqOutcome::Quit);
         assert!(packet.is_none());
     }
@@ -701,7 +715,9 @@ mod tests {
     async fn dry_run_sink_acks_packets() {
         let (pkt_tx, pkt_rx) = mpsc::channel(4);
         let (rep_tx, mut rep_rx) = mpsc::channel(4);
+
         let usb = tokio::spawn(usb_task(None, pkt_rx, rep_tx));
+
         pkt_tx
             .send(Outgoing {
                 packet: WHITE,
@@ -709,8 +725,10 @@ mod tests {
             })
             .await
             .expect("send");
+
         let report = rep_rx.recv().await.expect("report");
         assert_eq!(report, UsbReport::Ok);
+
         drop(pkt_tx);
         usb.await.expect("usb task");
     }

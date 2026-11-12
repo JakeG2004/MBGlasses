@@ -5,7 +5,7 @@ use clap::Parser;
 use glasses_broadcaster::catalog::Catalog;
 use glasses_broadcaster::link::LinkChoice;
 use glasses_broadcaster::runtime::{self, Outgoing, Sequencer};
-use glasses_broadcaster::term::{Terminal, UiState};
+use glasses_broadcaster::term::{DeviceStatus, Terminal, UiState};
 use tokio::sync::{mpsc, watch};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -146,7 +146,11 @@ async fn run(args: Args) -> anyhow::Result<()> {
     };
 
     let ui = UiState {
-        device_connected,
+        device_status: if device_connected {
+            DeviceStatus::Connected
+        } else {
+            DeviceStatus::Disconnected
+        },
         port_label,
         ..UiState::default()
     };

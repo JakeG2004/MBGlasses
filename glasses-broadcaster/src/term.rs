@@ -25,6 +25,13 @@ pub enum LoopStatus {
     Looping,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceStatus {
+    Connected,
+    Disconnected,
+    RemovalWarning,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandInfo {
     pub key: char,
@@ -99,8 +106,7 @@ pub struct UiState {
     pub categories: Vec<RoutineCategory>,
     pub status_message: Option<String>,
     pub is_error: bool,
-    pub device_connected: bool,
-    pub removal_warning: bool,
+    pub device_status: DeviceStatus,
     pub polite_mode: bool,
     pub port_label: String,
 }
@@ -116,8 +122,7 @@ impl Default for UiState {
             categories: Vec::new(),
             status_message: Some("System Ready - Listening for commands".to_string()),
             is_error: false,
-            device_connected: true,
-            removal_warning: false,
+            device_status: DeviceStatus::Connected,
             polite_mode: false,
             port_label: "FTDI 57600 8N1".to_string(),
         }
@@ -193,7 +198,7 @@ pub fn render_ui(frame: &mut Frame, state: &UiState) {
     render_command_grid(frame, main_chunks[1], state);
     render_status_and_preview(frame, main_chunks[2], state);
     render_footer(frame, main_chunks[3], state);
-    if state.removal_warning {
+    if state.device_status == DeviceStatus::RemovalWarning {
         render_removal_warning(frame, size);
     }
 }
@@ -269,10 +274,9 @@ fn render_header(frame: &mut Frame, area: Rect, state: &UiState) {
         .alignment(Alignment::Left);
     frame.render_widget(title_para, header_chunks[0]);
 
-    let (conn_text, conn_color) = if state.device_connected {
-        ("● ONLINE", Color::Green)
-    } else {
-        ("○ OFFLINE", Color::Red)
+    let (conn_text, conn_color) = match state.device_status {
+        DeviceStatus::Connected => ("● ONLINE", Color::Green),
+        DeviceStatus::Disconnected | DeviceStatus::RemovalWarning => ("○ OFFLINE", Color::Red),
     };
 
     let status_line = Line::from(vec![
@@ -564,8 +568,7 @@ mod tests {
         assert_eq!(state.loop_status, LoopStatus::Idle);
         assert_eq!(state.packet_count, 0);
         assert!(!state.is_error);
-        assert!(state.device_connected);
-        assert!(!state.removal_warning);
+        assert_eq!(state.device_status, DeviceStatus::Connected);
         assert_eq!(state.categories, &[]);
     }
 
@@ -640,8 +643,7 @@ mod tests {
         let backend = TestBackend::new(120, 30);
         let mut terminal = RatatuiTerminal::new(backend).unwrap();
         let state = UiState {
-            device_connected: false,
-            removal_warning: true,
+            device_status: DeviceStatus::RemovalWarning,
             ..UiState::default()
         };
 
@@ -672,8 +674,7 @@ mod tests {
         let backend = TestBackend::new(12, 4);
         let mut terminal = RatatuiTerminal::new(backend).unwrap();
         let state = UiState {
-            device_connected: false,
-            removal_warning: true,
+            device_status: DeviceStatus::RemovalWarning,
             ..UiState::default()
         };
 
