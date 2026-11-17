@@ -11,7 +11,7 @@ use crate::engine::Player;
 use crate::esp32h2::Esp32H2;
 use crate::link::{BroadcastLink, DeviceKind, LinkChoice, resolve};
 use crate::patterns::{DARK, Packet};
-use crate::term::{LoopStatus, Terminal, UiState, get_categories};
+use crate::term::{DeviceStatus, LoopStatus, Terminal, UiState, get_categories};
 use crate::xbee::Xbee;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,6 +19,12 @@ pub enum KeyCmd {
     Char(char),
     Acknowledge,
     Quit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Outgoing {
+    pub packet: Packet,
+    pub tail: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,12 +45,17 @@ pub struct Sequencer {
     catalog: Catalog,
     player: Player,
     ui: UiState,
+    last_tail: bool,
 }
 
 impl Sequencer {
     #[must_use]
     pub fn new(catalog: Catalog, device_connected: bool, mut ui: UiState) -> Self {
-        ui.device_connected = device_connected;
+        ui.device_status = if device_connected {
+            DeviceStatus::Connected
+        } else {
+            DeviceStatus::Disconnected
+        };
         ui.categories = get_categories(&catalog);
         if catalog.is_empty() {
             ui.status_message = Some("No shows loaded — idle".to_owned());
@@ -53,7 +64,13 @@ impl Sequencer {
             catalog,
             player: Player::new(),
             ui,
+            last_tail: false,
         }
+    }
+
+    #[must_use]
+    pub fn last_was_tail(&self) -> bool {
+        self.last_tail
     }
 
     #[must_use]
@@ -68,10 +85,10 @@ impl Sequencer {
 
     /// Handle a key immediately, even mid-cue.
     pub fn on_key(&mut self, cmd: KeyCmd, now: Instant) -> (SeqOutcome, Option<Packet>) {
-        if self.ui.removal_warning {
+        if self.ui.device_status == DeviceStatus::RemovalWarning {
             match cmd {
                 KeyCmd::Acknowledge => {
-                    self.ui.removal_warning = false;
+                    self.ui.device_status = DeviceStatus::Disconnected;
                     return (SeqOutcome::Continue, None);
                 }
                 KeyCmd::Quit | KeyCmd::Char('.') => {}
@@ -94,9 +111,18 @@ impl Sequencer {
             }
             KeyCmd::Char(',') => {
                 self.ui.last_key = Some(',');
-                self.player.stop();
+                let step = self.player.stop_with_tail(now);
+                self.last_tail = step.as_ref().is_some_and(|s| s.tail);
                 self.idle_ui(Some("Stopped".to_owned()));
-                (SeqOutcome::Continue, Some(self.note_packet(DARK)))
+                (
+                    SeqOutcome::Continue,
+                    step.map(|s| self.note_packet(s.packet)),
+                )
+            }
+            KeyCmd::Char('!') => {
+                self.ui.last_key = Some('!');
+                self.ui.polite_mode = !self.ui.polite_mode;
+                (SeqOutcome::Continue, None)
             }
             KeyCmd::Char('<') => {
                 self.ui.last_key = Some('<');
@@ -123,6 +149,7 @@ impl Sequencer {
     pub fn on_tick(&mut self, now: Instant) -> Option<Packet> {
         match self.player.advance(&self.catalog, now) {
             Ok(Some(step)) => {
+                self.last_tail = step.tail;
                 self.sync_routine_ui();
                 Some(self.note_packet(step.packet))
             }
@@ -153,10 +180,9 @@ impl Sequencer {
                 self.ui.status_message = Some(msg);
             }
             UsbReport::Removed => {
-                if self.ui.device_connected {
+                if self.ui.device_status == DeviceStatus::Connected {
                     self.player.stop();
-                    self.ui.device_connected = false;
-                    self.ui.removal_warning = true;
+                    self.ui.device_status = DeviceStatus::RemovalWarning;
                     self.ui.is_error = false;
                     self.idle_ui(Some(
                         "Transmitter removed - reconnect it and restart broadcasting".to_owned(),
@@ -170,8 +196,10 @@ impl Sequencer {
         let Some(show) = self.catalog.show_for_key(key).cloned() else {
             return (SeqOutcome::Continue, None);
         };
+        self.last_tail = false;
         match self.player.start(&show, &self.catalog, now) {
             Ok(Some(step)) => {
+                self.last_tail = step.tail;
                 self.sync_routine_ui();
                 self.ui.status_message = Some(format!("Playing {}", show.name));
                 self.ui.is_error = false;
@@ -209,6 +237,18 @@ impl Sequencer {
         self.ui.last_packet = packet;
         self.ui.packet_count = self.ui.packet_count.saturating_add(1);
         packet
+    }
+
+    fn should_broadcast_idle_dark(&self) -> bool {
+        !self.ui.polite_mode && !self.player.is_running() && self.player.deadline().is_none()
+    }
+
+    fn idle_dark_packet(&mut self) -> Option<Packet> {
+        if self.should_broadcast_idle_dark() {
+            Some(self.note_packet(DARK))
+        } else {
+            None
+        }
     }
 }
 
@@ -327,6 +367,8 @@ pub fn input_loop(tx: &mpsc::Sender<KeyCmd>) {
             && key_event.code == KeyCode::Char('c')
         {
             KeyCmd::Quit
+        } else if let KeyCode::Char(c) = key_event.code {
+            KeyCmd::Char(c)
         } else {
             match key_event.code {
                 KeyCode::Char(c) => KeyCmd::Char(c),
@@ -368,7 +410,7 @@ pub async fn tui_task(
 /// Only writer to the broadcast link. `None` is the `--dry-run` sink.
 pub async fn usb_task(
     mut device: Option<BroadcastLink>,
-    mut packets: mpsc::Receiver<Packet>,
+    mut packets: mpsc::Receiver<Outgoing>,
     reports: mpsc::Sender<UsbReport>,
 ) {
     let mut presence_check = tokio::time::interval(Duration::from_millis(500));
@@ -378,16 +420,32 @@ pub async fn usb_task(
     loop {
         tokio::select! {
             packet = packets.recv() => {
-                let Some(packet) = packet else { break; };
-                let report = match device.as_mut() {
-                    Some(link) => match link.send(&packet).await {
-                        Ok(()) => UsbReport::Ok,
-                        Err(err) => UsbReport::Err(err.to_string()),
-                    },
-                    None => UsbReport::Ok,
-                };
-                if reports.send(report).await.is_err() {
-                    break;
+                let Some(first) = packet else { break; };
+                let mut pending = std::collections::VecDeque::from([first]);
+                // Re-drain before every send so a newly queued show packet
+                // jumps ahead of any dark-tail packets still waiting.
+                while !pending.is_empty() {
+                    while let Ok(next) = packets.try_recv() {
+                        pending.push_back(next);
+                    }
+                    if pending.iter().any(|o| !o.tail) {
+                        while pending.front().is_some_and(|o| o.tail) {
+                            pending.pop_front();
+                        }
+                    }
+                    let Some(Outgoing { packet, .. }) = pending.pop_front() else {
+                        break;
+                    };
+                    let report = match device.as_mut() {
+                        Some(link) => match link.send(&packet).await {
+                            Ok(()) => UsbReport::Ok,
+                            Err(err) => UsbReport::Err(err.to_string()),
+                        },
+                        None => UsbReport::Ok,
+                    };
+                    if reports.send(report).await.is_err() {
+                        break;
+                    }
                 }
             }
             _ = presence_check.tick(), if device.is_some() => {
@@ -414,6 +472,13 @@ pub async fn usb_task(
             }
         }
     }
+    if let Some(link) = device.as_mut() {
+        for _ in 0..crate::engine::DARK_TAIL_COUNT {
+            if link.send(&DARK).await.is_err() {
+                break;
+            }
+        }
+    }
     if let Some(link) = device.take() {
         link.close().await;
     }
@@ -423,12 +488,18 @@ pub async fn usb_task(
 pub async fn sequencer_task(
     mut sequencer: Sequencer,
     mut keys: mpsc::Receiver<KeyCmd>,
-    packets: mpsc::Sender<Packet>,
+    packets: mpsc::Sender<Outgoing>,
     mut usb_reports: mpsc::Receiver<UsbReport>,
     ui: watch::Sender<UiState>,
     shutdown: watch::Sender<bool>,
 ) {
     let _ = ui.send(sequencer.snapshot());
+
+    let mut idle_broadcast = tokio::time::interval(crate::engine::DARK_TAIL_INTERVAL);
+
+    idle_broadcast.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    idle_broadcast.tick().await;
+
     loop {
         let wait = sequencer
             .deadline()
@@ -438,29 +509,40 @@ pub async fn sequencer_task(
             cmd = keys.recv() => {
                 let Some(cmd) = cmd else { break; };
                 let (outcome, packet) = sequencer.on_key(cmd, Instant::now());
-                send_packet(&packets, packet);
+                send_packet(&packets, packet, sequencer.last_was_tail());
                 let _ = ui.send(sequencer.snapshot());
+
                 if outcome == SeqOutcome::Quit {
                     let _ = shutdown.send(true);
                     break;
                 }
             }
+
             Some(report) = usb_reports.recv() => {
                 sequencer.on_usb(report);
                 let _ = ui.send(sequencer.snapshot());
             }
+
             () = sleep_optional(wait) => {
                 let packet = sequencer.on_tick(Instant::now());
-                send_packet(&packets, packet);
+                send_packet(&packets, packet, sequencer.last_was_tail());
+                let _ = ui.send(sequencer.snapshot());
+            }
+
+            _ = idle_broadcast.tick(),
+                if sequencer.should_broadcast_idle_dark() =>
+            {
+                let packet = sequencer.idle_dark_packet();
+                send_packet(&packets, packet, false);
                 let _ = ui.send(sequencer.snapshot());
             }
         }
     }
 }
 
-fn send_packet(tx: &mpsc::Sender<Packet>, packet: Option<Packet>) {
+fn send_packet(tx: &mpsc::Sender<Outgoing>, packet: Option<Packet>, tail: bool) {
     if let Some(packet) = packet {
-        let _ = tx.try_send(packet);
+        let _ = tx.try_send(Outgoing { packet, tail });
     }
 }
 
@@ -501,6 +583,7 @@ mod tests {
         let (catalog, _) = looping_white();
         let mut seq = Sequencer::new(catalog, true, UiState::default());
         let t0 = Instant::now();
+
         let (outcome, packet) = seq.on_key(KeyCmd::Char('w'), t0);
         assert_eq!(outcome, SeqOutcome::Continue);
         assert_eq!(packet, Some(WHITE));
@@ -509,9 +592,22 @@ mod tests {
         let (outcome, packet) = seq.on_key(KeyCmd::Char(','), t0);
         assert_eq!(outcome, SeqOutcome::Continue);
         assert_eq!(packet, Some(DARK));
+
         let snap = seq.snapshot();
         assert_eq!(snap.current_routine, "IDLE");
         assert_eq!(snap.loop_status, LoopStatus::Idle);
+        assert!(seq.deadline().is_some());
+
+        let mut at = seq.deadline().unwrap();
+        let mut count = 1;
+
+        while let Some(p) = seq.on_tick(at) {
+            assert_eq!(p, DARK);
+            count += 1;
+            at = seq.deadline().unwrap_or(at);
+        }
+
+        assert_eq!(count, crate::engine::DARK_TAIL_COUNT);
         assert!(seq.deadline().is_none());
     }
 
@@ -520,8 +616,10 @@ mod tests {
         let (catalog, _) = looping_white();
         let mut seq = Sequencer::new(catalog, true, UiState::default());
         let t0 = Instant::now();
+
         let _ = seq.on_key(KeyCmd::Char('w'), t0);
         let (outcome, packet) = seq.on_key(KeyCmd::Char('.'), t0);
+
         assert_eq!(outcome, SeqOutcome::Quit);
         assert!(packet.is_none());
         assert_eq!(seq.snapshot().current_routine, "IDLE");
@@ -531,7 +629,9 @@ mod tests {
     fn unknown_key_is_ignored() {
         let (catalog, _) = looping_white();
         let mut seq = Sequencer::new(catalog, false, UiState::default());
+
         let (outcome, packet) = seq.on_key(KeyCmd::Char('z'), Instant::now());
+
         assert_eq!(outcome, SeqOutcome::Continue);
         assert!(packet.is_none());
         assert_eq!(seq.snapshot().current_routine, "IDLE");
@@ -542,23 +642,24 @@ mod tests {
         let (catalog, _) = looping_white();
         let mut seq = Sequencer::new(catalog, true, UiState::default());
         let now = Instant::now();
+
         let _ = seq.on_key(KeyCmd::Char('w'), now);
 
         seq.on_usb(UsbReport::Removed);
+
         let state = seq.snapshot();
-        assert!(!state.device_connected);
-        assert!(state.removal_warning);
+        assert_eq!(state.device_status, DeviceStatus::RemovalWarning);
         assert_eq!(state.current_routine, "IDLE");
         assert!(seq.deadline().is_none());
 
         let (outcome, packet) = seq.on_key(KeyCmd::Char('w'), now);
         assert_eq!(outcome, SeqOutcome::Continue);
         assert!(packet.is_none());
-        assert!(seq.snapshot().removal_warning);
+        assert_eq!(seq.snapshot().device_status, DeviceStatus::RemovalWarning);
 
         let _ = seq.on_key(KeyCmd::Acknowledge, now);
-        assert!(!seq.snapshot().removal_warning);
-        assert!(!seq.snapshot().device_connected);
+
+        assert_eq!(seq.snapshot().device_status, DeviceStatus::Disconnected);
     }
 
     #[test]
@@ -570,20 +671,20 @@ mod tests {
         let _ = seq.on_key(KeyCmd::Acknowledge, Instant::now());
         seq.on_usb(UsbReport::Removed);
 
-        assert!(!seq.snapshot().removal_warning);
-        assert!(!seq.snapshot().device_connected);
+        assert_eq!(seq.snapshot().device_status, DeviceStatus::Disconnected);
     }
 
     #[test]
     fn removal_warning_is_independent_of_later_status_updates() {
         let (catalog, _) = looping_white();
         let mut seq = Sequencer::new(catalog, true, UiState::default());
+
         seq.on_usb(UsbReport::Removed);
 
         seq.on_usb(UsbReport::Err("temporary enumeration failure".to_owned()));
         let _ = seq.on_tick(Instant::now());
 
-        assert!(seq.snapshot().removal_warning);
+        assert_eq!(seq.snapshot().device_status, DeviceStatus::RemovalWarning);
     }
 
     #[test]
@@ -593,8 +694,7 @@ mod tests {
 
         seq.on_usb(UsbReport::Err("temporary enumeration failure".to_owned()));
 
-        assert!(seq.snapshot().device_connected);
-        assert!(!seq.snapshot().removal_warning);
+        assert_eq!(seq.snapshot().device_status, DeviceStatus::Connected);
         assert!(seq.snapshot().is_error);
     }
 
@@ -602,9 +702,11 @@ mod tests {
     fn removal_warning_still_allows_quit() {
         let (catalog, _) = looping_white();
         let mut seq = Sequencer::new(catalog, true, UiState::default());
+
         seq.on_usb(UsbReport::Removed);
 
         let (outcome, packet) = seq.on_key(KeyCmd::Char('.'), Instant::now());
+
         assert_eq!(outcome, SeqOutcome::Quit);
         assert!(packet.is_none());
     }
@@ -613,10 +715,20 @@ mod tests {
     async fn dry_run_sink_acks_packets() {
         let (pkt_tx, pkt_rx) = mpsc::channel(4);
         let (rep_tx, mut rep_rx) = mpsc::channel(4);
+
         let usb = tokio::spawn(usb_task(None, pkt_rx, rep_tx));
-        pkt_tx.send(WHITE).await.expect("send");
+
+        pkt_tx
+            .send(Outgoing {
+                packet: WHITE,
+                tail: false,
+            })
+            .await
+            .expect("send");
+
         let report = rep_rx.recv().await.expect("report");
         assert_eq!(report, UsbReport::Ok);
+
         drop(pkt_tx);
         usb.await.expect("usb task");
     }

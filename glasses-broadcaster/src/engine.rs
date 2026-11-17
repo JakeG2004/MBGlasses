@@ -4,17 +4,22 @@ use anyhow::{Context, Result, bail};
 
 use crate::catalog::{Catalog, Op, Show, Wait};
 use crate::patterns::{DARK, Packet, marquee_left, marquee_right, rotate13};
+use std::time::Duration;
 
 /// Full brightness is a no-op multiply on emit.
 pub const BRIGHTNESS_MAX: u8 = 255;
 /// Operator `<` / `>` step.
 pub const BRIGHTNESS_STEP: u8 = 16;
 
+pub const DARK_TAIL_COUNT: u8 = 100;
+pub const DARK_TAIL_INTERVAL: Duration = Duration::from_millis(18);
+
 /// Packet the sequencer should send, plus when the next opcode may run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Step {
     pub packet: Packet,
     pub deadline: Instant,
+    pub tail: bool,
 }
 
 /// Interprets a show program without talking to USB or the TUI.
@@ -29,6 +34,7 @@ pub struct Player {
     running: bool,
     show_name: String,
     loop_pass: usize,
+    tail_remaining: u8,
 }
 
 impl Default for Player {
@@ -43,6 +49,7 @@ impl Default for Player {
             running: false,
             show_name: "IDLE".to_owned(),
             loop_pass: 0,
+            tail_remaining: 0,
         }
     }
 }
@@ -83,6 +90,7 @@ impl Player {
     /// # Errors
     /// Returns an error if the show references unknown frames or timings, or fails execution.
     pub fn start(&mut self, show: &Show, catalog: &Catalog, now: Instant) -> Result<Option<Step>> {
+        self.tail_remaining = 0;
         self.program.clone_from(&show.program);
         self.pc = 0;
         self.looping = show.looping;
@@ -96,6 +104,7 @@ impl Player {
 
     /// Stop immediately; the sequencer may send an explicit dark packet.
     pub fn stop(&mut self) {
+        self.tail_remaining = 0;
         self.program.clear();
         self.pc = 0;
         self.looping = false;
@@ -109,6 +118,14 @@ impl Player {
     /// # Errors
     /// Returns an error if advancing the show program encounters invalid frame/timing references.
     pub fn advance(&mut self, catalog: &Catalog, now: Instant) -> Result<Option<Step>> {
+        if self.tail_remaining > 0 {
+            if let Some(deadline) = self.deadline
+                && now < deadline
+            {
+                return Ok(None);
+            }
+            return Ok(Some(self.tail_step(now)));
+        }
         if !self.running {
             return Ok(None);
         }
@@ -128,6 +145,23 @@ impl Player {
         self.brightness = self.brightness.saturating_add(BRIGHTNESS_STEP);
     }
 
+    pub fn stop_with_tail(&mut self, now: Instant) -> Option<Step> {
+        self.stop();
+        self.tail_remaining = DARK_TAIL_COUNT;
+        Some(self.tail_step(now))
+    }
+
+    fn tail_step(&mut self, now: Instant) -> Step {
+        self.tail_remaining = self.tail_remaining.saturating_sub(1);
+        let deadline = now + DARK_TAIL_INTERVAL;
+        self.deadline = (self.tail_remaining > 0).then_some(deadline);
+        Step {
+            packet: DARK,
+            deadline,
+            tail: true,
+        }
+    }
+
     fn execute_until_wait(&mut self, catalog: &Catalog, now: Instant) -> Result<Option<Step>> {
         if self.program.is_empty() {
             self.finish_idle();
@@ -142,8 +176,7 @@ impl Player {
                     self.loop_pass = self.loop_pass.saturating_add(1);
                     continue;
                 }
-                self.finish_idle();
-                return Ok(None);
+                return Ok(Some(self.finish_with_tail(now)));
             }
 
             let op = self.program[self.pc].clone();
@@ -187,6 +220,14 @@ impl Player {
         );
     }
 
+    /// A one-shot ran out: go idle and send the dark tail, same as `,`.
+    fn finish_with_tail(&mut self, now: Instant) -> Step {
+        self.running = false;
+        "IDLE".clone_into(&mut self.show_name);
+        self.tail_remaining = DARK_TAIL_COUNT;
+        self.tail_step(now)
+    }
+
     fn finish_idle(&mut self) {
         self.running = false;
         self.deadline = None;
@@ -203,7 +244,11 @@ impl Player {
     fn hold(&mut self, packet: Packet, wait: &Wait, now: Instant) -> Result<Step> {
         let deadline = now + wait.duration()?;
         self.deadline = Some(deadline);
-        Ok(Step { packet, deadline })
+        Ok(Step {
+            packet,
+            deadline,
+            tail: false,
+        })
     }
 }
 
@@ -289,7 +334,23 @@ mod tests {
             .expect("dark");
         assert_eq!(second.packet, DARK);
 
-        assert!(player.advance(&catalog, second.deadline).unwrap().is_none());
+        let tail_first = player
+            .advance(&catalog, second.deadline)
+            .unwrap()
+            .expect("tail starts");
+        assert_eq!(tail_first.packet, DARK);
+        assert!(!player.is_running());
+        assert_eq!(player.show_name(), "IDLE");
+
+        let mut at = tail_first.deadline;
+        let mut count = 1;
+        while let Some(step) = player.advance(&catalog, at).unwrap() {
+            assert_eq!(step.packet, DARK);
+            count += 1;
+            at = step.deadline;
+        }
+        assert_eq!(count, usize::from(DARK_TAIL_COUNT));
+        assert!(player.deadline().is_none());
         assert!(!player.is_running());
         assert_eq!(player.show_name(), "IDLE");
     }

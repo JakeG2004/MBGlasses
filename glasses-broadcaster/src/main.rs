@@ -4,9 +4,8 @@ use anyhow::{Context, bail};
 use clap::Parser;
 use glasses_broadcaster::catalog::Catalog;
 use glasses_broadcaster::link::LinkChoice;
-use glasses_broadcaster::patterns::Packet;
-use glasses_broadcaster::runtime::{self, Sequencer};
-use glasses_broadcaster::term::{Terminal, UiState};
+use glasses_broadcaster::runtime::{self, Outgoing, Sequencer};
+use glasses_broadcaster::term::{DeviceStatus, Terminal, UiState};
 use tokio::sync::{mpsc, watch};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -147,14 +146,18 @@ async fn run(args: Args) -> anyhow::Result<()> {
     };
 
     let ui = UiState {
-        device_connected,
+        device_status: if device_connected {
+            DeviceStatus::Connected
+        } else {
+            DeviceStatus::Disconnected
+        },
         port_label,
         ..UiState::default()
     };
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let (key_tx, key_rx) = mpsc::channel(32);
-    let (pkt_tx, pkt_rx) = mpsc::channel::<Packet>(8);
+    let (pkt_tx, pkt_rx) = mpsc::channel::<Outgoing>(512);
     let (usb_tx, usb_rx) = mpsc::channel(8);
     let (ui_tx, ui_rx) = watch::channel(ui.clone());
 
